@@ -29,8 +29,8 @@ SNR      = [];
 
 
 for chn = 1:size(EEG1, 2)
-    PearCorr = [PearCorr, sqrt(mean((EEG1(:,chn) - EEG2(:,chn)).^2))];
-    RMSE     = [RMSE    , corr2(EEG1(:,chn), EEG2(:,chn))];
+    RMSE     = [RMSE, sqrt(mean((EEG1(:,chn) - EEG2(:,chn)).^2))];
+    PearCorr = [PearCorr   , corr2(EEG1(:,chn), EEG2(:,chn))];
     SNR      = [SNR     , 10*log10(std(EEG1(:,chn)) / std(EEG1(:,chn) - EEG2(:,chn)))];
 
 end
