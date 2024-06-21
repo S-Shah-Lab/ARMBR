@@ -72,7 +72,7 @@ myARMBR.ARMBR(blink_chan=['EEG1','EEG2']).PerformanceMetrics().DispMetrics().Plo
 
 ```
 in this script `EEGGT` is the EEG ground truth if you are working with synthetic signals or you know what the signal should look like without blinks.
-When EEGGT is available, you can run methods like PerformanceMetrics() and DispMetrics(). PerformanceMetrics() will compute the Pearson correlation, RMSE, and SNR for all channels. DispMetrics() will display an average across channels.
+When `EEGGT` is available, you can run methods like `PerformanceMetrics()` and `DispMetrics()`. `PerformanceMetrics()` will compute the Pearson correlation, RMSE, and SNR for all channels. `DispMetrics()` will display an average across channels.
 
 ## Matlab Implementation 
 
