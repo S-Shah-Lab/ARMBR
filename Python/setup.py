@@ -24,7 +24,7 @@ package_dir={ '' : package_dir },
       author='Ludvik Alkhoury',
       author_email='Ludvik.Alkhoury@gmail.com',
       packages=['ARMBR'],
-      install_requires=['scipy', 'numpy', 'mne', 'matplotlib'])
+      install_requires=['scipy', 'numpy', 'mne', 'matplotlib', 'tqdm'])
       
       
 if __name__ == '__main__' and getattr( sys, 'argv', [] )[ 1: ]:
