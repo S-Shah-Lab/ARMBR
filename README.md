@@ -10,7 +10,7 @@ Below, we provide instructions on how to:
 1) download the package 
 2) implement the code in Matlab and Python
 
-## Download Package
+# Download Package
 1) Select a directory to save this repository to. This can be done by creating a directory on your Desktop (for example: C:/MyPC/Desktop/GitRepo/).
 Open the Git bash and type:
 ```
@@ -33,16 +33,16 @@ python -m pip install -e  ./Python
 
 
 
-## Matlab Implementation 
+# Matlab Implementation 
 
 
 
-## Python Implementation
+# Python Implementation
 
 
 ARMBR could be used as follows:
 
-# Option 1: Run from terminal
+## Option 1: Run from terminal
 Open your terminal and use one of the following commands:
 
 If you want to use the indices of the blink reference channels then use below, where -c "90" represents index 90: 
@@ -57,7 +57,7 @@ python -m ARMBR -p "YOUR_PATH\Sub1_Synthetic_Blink_Contaminated_EEG.fif" -c "C16
 At this point, this command line supports data of .fif, .edf, and .dat type.
 
 
-# Option 2: A generic script
+## Option 2: A generic script
 You can use a numpy array EEG with ARMBR. Here is a script:
 
 ```
@@ -83,7 +83,7 @@ in this script `EEGGT` is the EEG ground truth if you are working with synthetic
 When `EEGGT` is available, you can run methods like `PerformanceMetrics()` and `DispMetrics()`. `PerformanceMetrics()` will compute the Pearson correlation, RMSE, and SNR for all channels. `DispMetrics()` will display an average across channels.
 
 
-# Option 3: Work with mne raw object
+## Option 3: Work with mne raw object
 You can also use ARMBR with mne raw objects. Here is a script:
 
 ```
