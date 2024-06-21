@@ -3,6 +3,7 @@
 .vscode
 .ipynb_*
 *.pyc
+*.asv
 *.egg-info
 *.code-workspace
 *Del*
