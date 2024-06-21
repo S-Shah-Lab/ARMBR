@@ -11,6 +11,7 @@ class ARMBR:
 	def __init__(self, 
 	EEG				=	np.array([]), 
 	EEGGT           = None,
+	CleanedEEG      = None,
 	Fs				=	None, 
 	ChannelsName	=	[],
 	ChannelsNameInx	=	[],
@@ -18,7 +19,8 @@ class ARMBR:
 	Alpha			=	-1):
 		
 		self.EEG				= EEG
-		self.EEGGT        = EEGGT
+		self.EEGGT       	    = EEGGT
+		self.CleanedEEG    		= EEGGT
 		self.Fs					= Fs
 		self.ChannelsName		= ChannelsName
 		self.ChannelsNameInx	= ChannelsNameInx
@@ -44,27 +46,46 @@ class ARMBR:
 		return self
 		
 	def UnloadIntoRaw(self, raw):
-		raw._data = self.CleanedEEG
+		raw._data = self.CleanedEEG.T
 		
 		return self, raw
 
 		
 	def GetBlinkChannels(self, blink_chan):
 		
-		self.BlinkChannels = blink_chan
-		LowerChannelsName = [ch_name.lower() for ch_name in self.ChannelsName]
-			
-		blink_ch_id = []
-		blink_ch    = []
-		for bc in range(len(blink_chan)):
-			if blink_chan[bc].lower() in LowerChannelsName:
-				index = LowerChannelsName.index(blink_chan[bc].lower())
-				blink_ch_id.append(index)
-				blink_ch.append(blink_chan[bc].lower())
+		# check if blink_chan contains only integers or only strings
+		
+		
+		all_int = all(s.isdigit() for s in blink_chan)
+		all_str = all(isinstance(element, str) for element in blink_chan)
+		
+		if all_int:
+			blink_ch_id = []
+			for bc in range(len(blink_chan)):
+				blink_ch_id.append(int(blink_chan[bc]))
+			self.BlinkChannelsInx = blink_ch_id
+			print("Blink channel(s): " + str(self.BlinkChannelsInx))
+
+		elif all_str:
+			self.BlinkChannels = blink_chan
+			LowerChannelsName = [ch_name.lower() for ch_name in self.ChannelsName]
 				
-		self.BlinkChannels		= blink_ch
-		self.BlinkChannelsInx	= blink_ch_id
-		print("Blink channel(s): " + str(self.BlinkChannels))
+			blink_ch_id = []
+			blink_ch    = []
+			for bc in range(len(blink_chan)):
+				if blink_chan[bc].lower() in LowerChannelsName:
+					index = LowerChannelsName.index(blink_chan[bc].lower())
+					blink_ch_id.append(index)
+					blink_ch.append(blink_chan[bc].lower())
+					
+			self.BlinkChannels		= blink_ch
+			self.BlinkChannelsInx	= blink_ch_id
+			print("Blink channel(s): " + str(self.BlinkChannels))
+			
+		
+
+		
+		
 		
 		
 		
@@ -75,13 +96,18 @@ class ARMBR:
 		self.GetBlinkChannels(blink_chan)
 		
 		# Run ARMBR
-		print('Performing ARMBR')
-		X_purged, best_alpha, Bmask, Bc = armbr(self.EEG, self.BlinkChannelsInx, self.Fs, self.Alpha)
-		
-		self.CleanedEEG	= X_purged
-		self.Alpha0		= best_alpha
-		self.BlinkComp 	= Bc
-		self.BlinkMask	= Bmask
+		if len(self.BlinkChannelsInx) > 0:
+			print('Performing ARMBR')
+			X_purged, best_alpha, Bmask, Bc = armbr(self.EEG, self.BlinkChannelsInx, self.Fs, self.Alpha)
+			
+			X_purged = rotate_arr(X_purged)
+			self.CleanedEEG	= X_purged
+			self.Alpha0		= best_alpha
+			self.BlinkComp 	= Bc
+			self.BlinkMask	= Bmask
+			
+		else:
+			print('No blink channels were identified. ARMBR was not performed.\n' )
 		
 		return self
 		
