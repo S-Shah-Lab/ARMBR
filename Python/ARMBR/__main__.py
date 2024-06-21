@@ -9,7 +9,6 @@ import matplotlib.pyplot as plt
 
 parser1 = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
 
-
 parser1.add_argument( "-p", "--data-path",      default='', type=str, help='Full path of the EEG data. At this point, the code supports .fif, .edf, and .dat data.')
 parser1.add_argument( "-c", "--blink-channels", default='', type=str, help='Names or indices or blink reference channel(s).')
 parser1.add_argument( '-f', '--filter-band', metavar='l_freq_hz, h_freq_hz', default='1,40', type=str, help="String of cutoff for lower and upper frequency limits of the EEG (and the acoustic envelope, if used). Pass `None,None` to turn off filtering." )
@@ -17,13 +16,12 @@ parser1.add_argument( "--save", action = 'store_true', help='Use to save the EEG
 parser1.add_argument( "--save-path", default='', type=str, help='Directory where data is saved.')
 parser1.add_argument( "--plot", action = 'store_true', help='Use to plot the TRF.')
 
-
 OPTS1 = parser1.parse_args()
+
 
 filter_band		= [float(f) for f in OPTS1.filter_band.replace(' ','').split(',')]
 blink_channels	= [f for f in OPTS1.blink_channels.replace(' ','').split(',')]
 
-print(blink_channels)
 
 if len(OPTS1.data_path) > 0:
 	if len(blink_channels) > 0:

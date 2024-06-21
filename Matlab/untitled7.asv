@@ -1,0 +1,5 @@
+vec = [1, 2, 3, 4]; 
+allIntegers = isinteger(vec)
+
+
+vec = ['Fp2', 'Fp1'];  
