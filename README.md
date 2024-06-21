@@ -11,6 +11,10 @@ Below, we provide instructions on how to:
 2) implement the code in Matlab and Python
 
 # Download Package
+
+You can download the package directly from this repository. If so, we recommend downloading a stable release. 
+
+Alternatively, you can use git:
 1) Select a directory to save this repository to. This can be done by creating a directory on your Desktop (for example: C:/MyPC/Desktop/GitRepo/).
 Open the Git bash and type:
 ```
