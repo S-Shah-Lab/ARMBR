@@ -29,7 +29,7 @@ cd ARMBR/
 3) Now that you have the repository, run setup.py to install all dependent packages:
 ```
 python -m pip install -e  ./Python
-
+```
 
 
 ## Matlab Implementation 
