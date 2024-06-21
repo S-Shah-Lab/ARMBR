@@ -27,6 +27,15 @@ PearCorr = [];
 RMSE     = [];
 SNR      = [];
 
+s1 = size(EEG1);
+if s1(1) < s1(2)
+    EEG1 = EEG1';
+end
+
+s2 = size(EEG2);
+if s2(1) < s2(2)
+    EEG2 = EEG2';
+end
 
 for chn = 1:size(EEG1, 2)
     RMSE     = [RMSE, sqrt(mean((EEG1(:,chn) - EEG2(:,chn)).^2))];

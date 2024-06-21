@@ -41,6 +41,7 @@ if Alpha == -1 % Run the automatic Alpha selection mechanism
     alpha_range = 0.01:0.1:10;
 
     for alpha = alpha_range
+        displayProgress(alpha, 10);
         [~, Blink_Artifact, ~] = Blink_Selection(orig_eeg, good_eeg, good_blinks, alpha);
                                                            
         if ~sum(isnan(Blink_Artifact))

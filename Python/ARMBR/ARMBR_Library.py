@@ -177,166 +177,166 @@ class ARMBR:
 #=============================================
 
 def MaxAmp(data_vector, fs, window_size=15, shift_size=15):
-    """
-    Calculate the absolute maximum amplitude of window_size second long data segments.
+	"""
+	Calculate the absolute maximum amplitude of window_size second long data segments.
 
-    Parameters:
-    - data_vector: numpy array or list, time-series data of N samples
-    - fs: float, sampling frequency in Hz
-    - window_size: float, size of data window to be processed in seconds (default: 15 seconds)
-    - shift_size: float, shift amount to get to the next window in seconds (default: 15 seconds)
+	Parameters:
+	- data_vector: numpy array or list, time-series data of N samples
+	- fs: float, sampling frequency in Hz
+	- window_size: float, size of data window to be processed in seconds (default: 15 seconds)
+	- shift_size: float, shift amount to get to the next window in seconds (default: 15 seconds)
 
-    Returns:
-    - max_amp: list of M values, absolute maximum of the window_size second long data segments
-    """
+	Returns:
+	- max_amp: list of M values, absolute maximum of the window_size second long data segments
+	"""
 
-    # Convert window sizes from seconds to points
-    window_size_pts = int(window_size * fs)
-    shift_size_pts = int(shift_size * fs)
+	# Convert window sizes from seconds to points
+	window_size_pts = int(window_size * fs)
+	shift_size_pts = int(shift_size * fs)
 
-    max_amp = []
+	max_amp = []
 
-    # Iterate over the data_vector in segments defined by window_size and shift_size
-    for i in range(0, len(data_vector), shift_size_pts + 1):
-        start = i
-        finish = min(i + window_size_pts, len(data_vector))
+	# Iterate over the data_vector in segments defined by window_size and shift_size
+	for i in range(0, len(data_vector), shift_size_pts + 1):
+		start = i
+		finish = min(i + window_size_pts, len(data_vector))
 
-        window_data = data_vector[start:finish]
-        max_amp.append(np.max(np.abs(window_data)))
+		window_data = data_vector[start:finish]
+		max_amp.append(np.max(np.abs(window_data)))
 
-    return max_amp
-	
+	return max_amp
+
 	
 
 def Segment(data_vector, fs, window_size=15, shift_size=15):
-    """
-    Segment the data_vector into window_size second long data segments.
+	"""
+	Segment the data_vector into window_size second long data segments.
 
-    Parameters:
-    - data_vector: numpy array or list, time-series data of N samples
-    - fs: float, sampling frequency in Hz
-    - window_size: float, size of data window to be processed in seconds (default: 15 seconds)
-    - shift_size: float, shift amount to get to the next window in seconds (default: 15 seconds)
+	Parameters:
+	- data_vector: numpy array or list, time-series data of N samples
+	- fs: float, sampling frequency in Hz
+	- window_size: float, size of data window to be processed in seconds (default: 15 seconds)
+	- shift_size: float, shift amount to get to the next window in seconds (default: 15 seconds)
 
-    Returns:
-    - segmented_data: list of M arrays, window_size second long data segments
-    """
+	Returns:
+	- segmented_data: list of M arrays, window_size second long data segments
+	"""
 
-    # Convert window sizes from seconds to points
-    window_size_pts = int(window_size * fs)
-    shift_size_pts = int(shift_size * fs)
+	# Convert window sizes from seconds to points
+	window_size_pts = int(window_size * fs)
+	shift_size_pts = int(shift_size * fs)
 
-    segmented_data = []
+	segmented_data = []
 
-    # Iterate over the data_vector in segments defined by window_size and shift_size
-    for i in range(0, len(data_vector), shift_size_pts + 1):
-        start = i
-        finish = min(i + window_size_pts, len(data_vector))
+	# Iterate over the data_vector in segments defined by window_size and shift_size
+	for i in range(0, len(data_vector), shift_size_pts + 1):
+		start = i
+		finish = min(i + window_size_pts, len(data_vector))
 
-        window_data = data_vector[start:finish]
-        segmented_data.append(window_data)
+		window_data = data_vector[start:finish]
+		segmented_data.append(window_data)
 
-    return segmented_data
+	return segmented_data
 	
 	
 def DataSelect(data_vector, init_size=3, std_dev_threshold=5):
-    """
-    Filter out outliers from the data vector based on a given threshold and initial size.
+	"""
+	Filter out outliers from the data vector based on a given threshold and initial size.
 
-    Parameters:
-    - data_vector: numpy array or list, vector of N values from which outliers are to be eliminated
-    - init_size: int, number of data points used for initialization (default: 3)
-    - std_dev_threshold: float, threshold over which points are considered outliers (default: 5)
+	Parameters:
+	- data_vector: numpy array or list, vector of N values from which outliers are to be eliminated
+	- init_size: int, number of data points used for initialization (default: 3)
+	- std_dev_threshold: float, threshold over which points are considered outliers (default: 5)
 
-    Returns:
-    - filtered_data: list of values excluding the outliers
-    - filtered_data_inx: list of indices of the values excluding the outliers
-    - excluded_points: list of the excluded outliers
-    - excluded_points_inx: list of indices of the excluded outliers
-    """
+	Returns:
+	- filtered_data: list of values excluding the outliers
+	- filtered_data_inx: list of indices of the values excluding the outliers
+	- excluded_points: list of the excluded outliers
+	- excluded_points_inx: list of indices of the excluded outliers
+	"""
 
-    if len(data_vector) == 0:
-        raise ValueError('The input data_vector must not be empty.')
+	if len(data_vector) == 0:
+		raise ValueError('The input data_vector must not be empty.')
 
-    # Initialize arrays to store filtered data
-    filtered_data = []
-    filtered_data_inx = []
+	# Initialize arrays to store filtered data
+	filtered_data = []
+	filtered_data_inx = []
 
-    excluded_points = []
-    excluded_points_inx = []
+	excluded_points = []
+	excluded_points_inx = []
 
-    data_vector_ = np.array(data_vector)
+	data_vector_ = np.array(data_vector)
 
-    # Initialize with the first few points
-    for j in range(min(init_size, len(data_vector))):
-        filtered_data.append(data_vector_[j])
-        filtered_data_inx.append(j)
+	# Initialize with the first few points
+	for j in range(min(init_size, len(data_vector))):
+		filtered_data.append(data_vector_[j])
+		filtered_data_inx.append(j)
 
-    # Iterate through the data
-    for i in range(init_size, len(data_vector_)):
-        # Extract the previous points
-        previous_points = data_vector_[:i]
+	# Iterate through the data
+	for i in range(init_size, len(data_vector_)):
+		# Extract the previous points
+		previous_points = data_vector_[:i]
 
-        # Calculate mean and standard deviation of the previous points
-        mean_prev = np.mean(previous_points)
-        std_dev_prev = np.std(previous_points)
+		# Calculate mean and standard deviation of the previous points
+		mean_prev = np.mean(previous_points)
+		std_dev_prev = np.std(previous_points)
 
-        # Check if the current point is within the standard deviation threshold
-        if abs(data_vector_[i] - mean_prev) <= std_dev_threshold * std_dev_prev:
-            # Include the current point in the filtered data
-            filtered_data.append(data_vector_[i])
-            filtered_data_inx.append(i)
-        else:
-            # Exclude the current point
-            data_vector_[i] = mean_prev
-            excluded_points.append(data_vector_[i])
-            excluded_points_inx.append(i)
+		# Check if the current point is within the standard deviation threshold
+		if abs(data_vector_[i] - mean_prev) <= std_dev_threshold * std_dev_prev:
+			# Include the current point in the filtered data
+			filtered_data.append(data_vector_[i])
+			filtered_data_inx.append(i)
+		else:
+			# Exclude the current point
+			data_vector_[i] = mean_prev
+			excluded_points.append(data_vector_[i])
+			excluded_points_inx.append(i)
 
-    return filtered_data, filtered_data_inx, excluded_points, excluded_points_inx
+	return filtered_data, filtered_data_inx, excluded_points, excluded_points_inx
 	
 	
 	
 	
 def Data_Prep(eeg, fs, blink_chan_nbr):
-    """
-    Prepare EEG data by filtering out segments affected by blinks.
+	"""
+	Prepare EEG data by filtering out segments affected by blinks.
 
-    Parameters:
-    - eeg: numpy array, multi-channel time-series (samples by channels)
-    - fs: float, sampling frequency in Hz
-    - blink_chan_nbr: list of int, indices of channels most affected by blinks
+	Parameters:
+	- eeg: numpy array, multi-channel time-series (samples by channels)
+	- fs: float, sampling frequency in Hz
+	- blink_chan_nbr: list of int, indices of channels most affected by blinks
 
-    Returns:
-    - GoodEEG: numpy array, multi-channel time-series of good EEG signals
-    - OrigEEG: numpy array, original multi-channel time-series as input EEG
-    - GoodBlinks: numpy array, time-series of good blink signal
-    """
-    if eeg.shape[0] < eeg.shape[1]:
-        eeg = eeg.T
-    OrigEEG = eeg
+	Returns:
+	- GoodEEG: numpy array, multi-channel time-series of good EEG signals
+	- OrigEEG: numpy array, original multi-channel time-series as input EEG
+	- GoodBlinks: numpy array, time-series of good blink signal
+	"""
+	if eeg.shape[0] < eeg.shape[1]:
+		eeg = eeg.T
+	OrigEEG = eeg
 
-    Blink = np.mean(eeg[:, blink_chan_nbr], axis=1)
+	Blink = np.mean(eeg[:, blink_chan_nbr], axis=1)
 
-    if np.median(Blink) > np.mean(Blink):
-        Blink = -Blink
+	if np.median(Blink) > np.mean(Blink):
+		Blink = -Blink
 
-    BlinkAmp = MaxAmp(np.diff(Blink), fs)
-    Blink_epochs = Segment(Blink, fs)
-    eeg_epochs = Segment(eeg, fs)
-    _, filtered_data_pts, _, _ = DataSelect(BlinkAmp)
+	BlinkAmp = MaxAmp(np.diff(Blink), fs)
+	Blink_epochs = Segment(Blink, fs)
+	eeg_epochs = Segment(eeg, fs)
+	_, filtered_data_pts, _, _ = DataSelect(BlinkAmp)
 
-    GoodBlinks = []
-    GoodEEG = []
+	GoodBlinks = []
+	GoodEEG = []
 
-    for g in range(len(Blink_epochs)):
-        if g in filtered_data_pts:
-            GoodBlinks.append(Blink_epochs[g])
-            GoodEEG.append(eeg_epochs[g])
+	for g in range(len(Blink_epochs)):
+		if g in filtered_data_pts:
+			GoodBlinks.append(Blink_epochs[g])
+			GoodEEG.append(eeg_epochs[g])
 
-    GoodBlinks = np.concatenate(GoodBlinks)
-    GoodEEG = np.concatenate(GoodEEG, axis=0)
+	GoodBlinks = np.concatenate(GoodBlinks)
+	GoodEEG = np.concatenate(GoodEEG, axis=0)
 
-    return GoodEEG, OrigEEG, GoodBlinks
+	return GoodEEG, OrigEEG, GoodBlinks
 	
 	
 	
@@ -422,47 +422,47 @@ def projectout(X, X_reduced, Bmask, maskIn=None):
 
 
 def Blink_Selection(eeg_orig, eeg_filt, Blink_filt, alpha0, maskIn=None):
-    """
-    Selects and suppresses blink artifacts from EEG data.
+	"""
+	Selects and suppresses blink artifacts from EEG data.
 
-    Parameters:
-    - eeg_orig: numpy array, multi-channel time-series (samples by channels) containing all EEG data
-    - eeg_filt: numpy array, multi-channel time-series (samples by channels) containing a reduced set of the original EEG
-    - Blink_filt: numpy array, time-series containing a reduced set of the blink reference signal
-    - alpha0: float, optimal blink level threshold
-    - maskIn: numpy array, vector of the same size as the number of channels (1 for included, 0 for excluded)
+	Parameters:
+	- eeg_orig: numpy array, multi-channel time-series (samples by channels) containing all EEG data
+	- eeg_filt: numpy array, multi-channel time-series (samples by channels) containing a reduced set of the original EEG
+	- Blink_filt: numpy array, time-series containing a reduced set of the blink reference signal
+	- alpha0: float, optimal blink level threshold
+	- maskIn: numpy array, vector of the same size as the number of channels (1 for included, 0 for excluded)
 
-    Returns:
-    - no_blink_eeg: numpy array, multi-channel time-series after blinks are suppressed
-    - Blink_Artifact: numpy array, time-series of the blink component that is removed from the EEG data matrix
-    - ref: numpy array, train of pulses at the blink location
-    """
-    nChannels = eeg_orig.shape[1]
+	Returns:
+	- no_blink_eeg: numpy array, multi-channel time-series after blinks are suppressed
+	- Blink_Artifact: numpy array, time-series of the blink component that is removed from the EEG data matrix
+	- ref: numpy array, train of pulses at the blink location
+	"""
+	nChannels = eeg_orig.shape[1]
 
-    if maskIn is None:
-        maskIn = np.ones(nChannels, dtype=int)  # all channels are used
+	if maskIn is None:
+		maskIn = np.ones(nChannels, dtype=int)  # all channels are used
 
-    # Compute the Inter-quartile Range
-    Qa = np.quantile(Blink_filt, 0.159)
-    Qb = np.quantile(Blink_filt, 0.841)
-    Q2 = np.quantile(Blink_filt, 0.5)
+	# Compute the Inter-quartile Range
+	Qa = np.quantile(Blink_filt, 0.159)
+	Qb = np.quantile(Blink_filt, 0.841)
+	Q2 = np.quantile(Blink_filt, 0.5)
 
-    StD = (Qb - Qa) / 2
-    T0 = Q2 + alpha0 * StD
+	StD = (Qb - Qa) / 2
+	T0 = Q2 + alpha0 * StD
 
-    # Build a reference signal, which is a train of 1 and 0, where 1 indicates a blink and 0 indicates no blink
-    eeg_reduced = eeg_filt[Blink_filt > Qa, :]
-    Blink_reduced = Blink_filt[Blink_filt > Qa]
-    ref = Blink_reduced > T0
+	# Build a reference signal, which is a train of 1 and 0, where 1 indicates a blink and 0 indicates no blink
+	eeg_reduced = eeg_filt[Blink_filt > Qa, :]
+	Blink_reduced = Blink_filt[Blink_filt > Qa]
+	ref = Blink_reduced > T0
 
-    # Project out blink components
-    if np.sum(ref) != 0:
-        _, _, _, _, Blink_Artifact, no_blink_eeg = projectout(eeg_orig, eeg_reduced, ref, maskIn)
-    else:
-        Blink_Artifact = np.array([])
-        no_blink_eeg = np.array([])
+	# Project out blink components
+	if np.sum(ref) != 0:
+		_, _, _, _, Blink_Artifact, no_blink_eeg = projectout(eeg_orig, eeg_reduced, ref, maskIn)
+	else:
+		Blink_Artifact = np.array([])
+		no_blink_eeg = np.array([])
 
-    return no_blink_eeg, Blink_Artifact, ref
+	return no_blink_eeg, Blink_Artifact, ref
 
 
 
