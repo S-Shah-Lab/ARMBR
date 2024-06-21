@@ -49,7 +49,7 @@ python -m ARMBR -p "YOUR_PATH\Sub1_Synthetic_Blink_Contaminated_EEG.fif" -c "C16
 At this point, this command line supports data of .fif, .edf, and .dat type.
 
 
-# Option 2: Write your script
+# Option 2: A generic script
 You can use a numpy array EEG with ARMBR. Here is a script:
 
 ```
@@ -73,6 +73,29 @@ myARMBR.ARMBR(blink_chan=['EEG1','EEG2']).PerformanceMetrics().DispMetrics().Plo
 ```
 in this script `EEGGT` is the EEG ground truth if you are working with synthetic signals or you know what the signal should look like without blinks.
 When `EEGGT` is available, you can run methods like `PerformanceMetrics()` and `DispMetrics()`. `PerformanceMetrics()` will compute the Pearson correlation, RMSE, and SNR for all channels. `DispMetrics()` will display an average across channels.
+
+
+# Option 3: Work with mne raw object
+You can also use ARMBR with mne raw objects. Here is a script:
+
+```
+from ARMBR_Library import *
+import mne
+
+raw = mne.io.read_raw_fif("YOUR_RAW_PATH.fif", preload=True)
+raw.filter(l_freq=1, h_freq=40)
+
+myARMBR = ARMBR()
+myARMBR.ImportFromRaw(raw)
+myARMBR.ARMBR(blink_chan=['EEG1','EEG2'])
+myARMBR.UnloadIntoRaw(raw)
+
+raw.plot()
+raw.save("SAVE_PATH.fif")
+
+```
+With this code you can process the raw data using ARMBR and load it back to the raw object.
+
 
 ## Matlab Implementation 
 
