@@ -32,6 +32,14 @@ python -m pip install -e  ./Python
 ```
 
 
+
+## Matlab Implementation 
+
+
+
+## Python Implementation
+
+
 ARMBR could be used as follows:
 
 # Option 1: Run from terminal
@@ -97,8 +105,4 @@ raw.save("SAVE_PATH.fif")
 With this code you can process the raw data using ARMBR and load it back to the raw object.
 
 
-## Matlab Implementation 
 
-
-
-## Python Implementation
