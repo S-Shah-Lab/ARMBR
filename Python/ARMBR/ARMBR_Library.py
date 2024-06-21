@@ -97,7 +97,6 @@ class ARMBR:
 		
 		# Run ARMBR
 		if len(self.BlinkChannelsInx) > 0:
-			print('Performing ARMBR')
 			X_purged, best_alpha, Bmask, Bc = armbr(self.EEG, self.BlinkChannelsInx, self.Fs, self.Alpha)
 			
 			X_purged = rotate_arr(X_purged)
@@ -489,7 +488,7 @@ def armbr(X, blink_ch_id, fs, alpha=-1):
 		# Store ratio of energies to choose best alpha value
 		Delta = []
 		alpha_range = np.arange(0.01, 10, 0.1)
-		for alpha in tqdm(alpha_range, desc="Processing items"):
+		for alpha in tqdm(alpha_range, desc="Running ARMBR"):
 			
 		#for alpha in alpha_range:
 		
