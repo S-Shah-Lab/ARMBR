@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 parser1 = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
 
 
-parser1.add_argument( "-p", "--data-path",      default='', type=str, help='Full path of the EEG data. At this point, the code supports raw objects (.fif).')
+parser1.add_argument( "-p", "--data-path",      default='', type=str, help='Full path of the EEG data. At this point, the code supports .fif, .edf, and .dat data.')
 parser1.add_argument( "-c", "--blink-channels", default='', type=str, help='Names or indices or blink reference channel(s).')
 parser1.add_argument( '-f', '--filter-band', metavar='l_freq_hz, h_freq_hz', default='1,40', type=str, help="String of cutoff for lower and upper frequency limits of the EEG (and the acoustic envelope, if used). Pass `None,None` to turn off filtering." )
 parser1.add_argument( "--save", action = 'store_true', help='Use to save the EEG data after blink removal.')
@@ -27,8 +27,26 @@ print(blink_channels)
 
 if len(OPTS1.data_path) > 0:
 	if len(blink_channels) > 0:
-
-		raw = mne.io.read_raw_fif(OPTS1.data_path, preload=True)
+		
+		file_extension = os.path.splitext(OPTS1.data_path)[1]
+		
+		if file_extension == '.fif':
+			raw = mne.io.read_raw_fif(OPTS1.data_path, preload=True)
+		
+		elif file_extension == '.edf':
+			raw = mne.io.read_raw_edf(OPTS1.data_path, preload=True)
+		
+		elif file_extension == '.dat':
+			
+			from BCI2kReader import BCI2kReader as b2k
+			
+			reader = b2k.BCI2kReader(OPTS1.data_path)
+			eeg_data = reader.signals
+			sampling_rate = reader.samplingrate
+			ch_names = ['EEG' + str(i+1) for i in range(eeg_data.shape[0])]  # Example channel names
+			info = mne.create_info(ch_names=ch_names, sfreq=sampling_rate, ch_types='eeg')
+			raw = mne.io.RawArray(eeg_data*1e-6, info)
+			
 		raw.filter(l_freq=filter_band[0], h_freq=filter_band[1])
 
 		myARMBR = ARMBR()
