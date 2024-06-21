@@ -1,4 +1,5 @@
 # ARMBR
+Version 1.0.0 
 
 This repository is the original implementation of ARMBR:    
 Artifact-Reference Multivariate Backward Regression (ARMBR) Outperforms Common EEG Blink Artifact Removal Methods
