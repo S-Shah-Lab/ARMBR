@@ -79,7 +79,7 @@ disp(['========================================='])
 ## Option 2: EEGLAB structure
 
 Here, make sure you install EEGLAB and add the path to your directory. 
-We will create an EEGLAB structure and apply ARMBR to the EEG structure using `pop_ARMBR`. 
+We will create an EEGLAB structure and apply ARMBR to the EEG structure using `pop_ARMBR`. The blink spatial pattern can be access from the EEG structure: `EEG.BlinkSpatialPattern`.
 ```
 clc
 close all
