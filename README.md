@@ -149,6 +149,7 @@ You can use a numpy array EEG with ARMBR. Here is a script:
 ```
 from ARMBR_Library import *
 import mne
+import matplotlib.pyplot as plt
 
 EEG_Blink	= np.array([.....])
 Clean		  = np.array([.....])
@@ -176,16 +177,17 @@ You can also use ARMBR with mne raw objects. Here is a script:
 from ARMBR_Library import *
 import mne
 
-raw = mne.io.read_raw_fif("YOUR_RAW_PATH.fif", preload=True)
+raw = mne.io.read_raw_fif("..\SemiSyntheticData\Sub1\Sub1_Synthetic_Blink_Contaminated_EEG.fif", preload=True)
 raw.filter(l_freq=1, h_freq=40)
 
 myARMBR = ARMBR()
 myARMBR.ImportFromRaw(raw)
-myARMBR.ARMBR(blink_chan=['EEG1','EEG2'])
+myARMBR.ARMBR(blink_chan=['C16','C29'])
 myARMBR.UnloadIntoRaw(raw)
 
 raw.plot()
-raw.save("SAVE_PATH.fif")
+plt.show()
+# raw.save("SAVE_PATH.fif")
 
 ```
 With this code you can process the raw data using ARMBR and load it back to the raw object.
