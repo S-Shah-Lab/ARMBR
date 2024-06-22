@@ -30,7 +30,7 @@ else
     blink_chan = blink_chan;
 end
 
-blink_chan
+
 [ARMBR_EEG, ~, ~, ~] = ARMBR(EEG_, blink_chan, Fs_);
 
 EEG_size = size(ARMBR_EEG);
