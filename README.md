@@ -175,7 +175,7 @@ You can also use ARMBR with mne raw objects. Below is a script.
 You can extract the blink spatial pattern from the ARMBR object, `myARMBR`, using `myARMBR.BlinkSpatialPattern`. 
 This pattern can be applied to another EEG dataset. First, create an ARMBR object for the second EEG dataset, denoted `myARMBR2`.
 Now apply the spatial pattern computed from the original EEG signal:
-`myARMBR2.ApplyBlinkSpatialPattern(myARMBR.BlinkSpatialPattern)'
+`myARMBR2.ApplyBlinkSpatialPattern(myARMBR.BlinkSpatialPattern)`
 
 
 
