@@ -1,4 +1,4 @@
-function [no_blink_eeg, Blink_Artifact, ref] = Blink_Selection(eeg_orig, eeg_filt, Blink_filt, alpha0, maskIn)
+function [no_blink_eeg, Blink_Artifact, ref, BlinkSpatialPattern] = Blink_Selection(eeg_orig, eeg_filt, Blink_filt, alpha0, maskIn)
 % [no_blink_eeg, Blink_Artifact, ref] = Blink_Selection(eeg_orig, eeg_filt, Blink_filt, alpha0, maskIn)
 %
 % Inputs:
@@ -54,10 +54,12 @@ ref           = Blink_reduced > T0;
 
 % Project out blink components
 if sum(ref) ~= 0
-    [~, ~, ~, ~, Blink_Artifact, no_blink_eeg] = projectout(eeg_orig, eeg_reduced, ref, maskIn);
+    [BlinkSpatialPattern, ~, ~, ~, Blink_Artifact, no_blink_eeg] = projectout(eeg_orig, eeg_reduced, ref, maskIn);
 else
     Blink_Artifact = [];
     no_blink_eeg = [];
+    BlinkSpatialPattern = [];
+
 end
 
 end

@@ -15,7 +15,7 @@ Clean_EEG                        = BPF(Clean_EEG, fs, [1 40]);
 
 % Run ARMBR
 ref_chan_nbr = [80, 93]; %indices for Fp1 and Fp2
-[ARMBR_EEG, Set_IQR_Thresh, Blink_Ref, Blink_Artifact] = ARMBR(Sythentic_Blink_Contaminated_EEG, ref_chan_nbr, fs);
+[ARMBR_EEG, Set_IQR_Thresh, Blink_Ref, Blink_Artifact, BlinkSpatialPattern] = ARMBR(Sythentic_Blink_Contaminated_EEG, ref_chan_nbr, fs);
 
 % Compute performance metrics
 [PearCorr, RMSE, SNR] = PerformanceMetrics(Clean_EEG, ARMBR_EEG);

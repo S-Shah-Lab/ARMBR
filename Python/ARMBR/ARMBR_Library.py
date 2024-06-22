@@ -97,13 +97,14 @@ class ARMBR:
 		
 		# Run ARMBR
 		if len(self.BlinkChannelsInx) > 0:
-			X_purged, best_alpha, Bmask, Bc = armbr(self.EEG, self.BlinkChannelsInx, self.Fs, self.Alpha)
+			X_purged, best_alpha, Bmask, Bc, BlinkSpatialPattern = armbr(self.EEG, self.BlinkChannelsInx, self.Fs, self.Alpha)
 			
 			X_purged = rotate_arr(X_purged)
 			self.CleanedEEG	= X_purged
 			self.Alpha0		= best_alpha
 			self.BlinkComp 	= Bc
 			self.BlinkMask	= Bmask
+			self.BlinkSpatialPattern = BlinkSpatialPattern
 			
 		else:
 			print('No blink channels were identified. ARMBR was not performed.\n' )
@@ -111,6 +112,17 @@ class ARMBR:
 		return self
 		
 		
+	def ApplyBlinkSpatialPattern(self, BlinkSpatialPattern):
+		
+		EEG = self.EEG 
+		EEG = rotate_arr(EEG)
+		
+		self.CleanedEEG = EEG.dot(BlinkSpatialPattern)
+
+		return self
+		
+
+
 		
 	def PerformanceMetrics(self):
 		
@@ -457,12 +469,13 @@ def Blink_Selection(eeg_orig, eeg_filt, Blink_filt, alpha0, maskIn=None):
 
 	# Project out blink components
 	if np.sum(ref) != 0:
-		_, _, _, _, Blink_Artifact, no_blink_eeg = projectout(eeg_orig, eeg_reduced, ref, maskIn)
+		BlinkSpatialPattern, _, _, _, Blink_Artifact, no_blink_eeg = projectout(eeg_orig, eeg_reduced, ref, maskIn)
 	else:
 		Blink_Artifact = np.array([])
 		no_blink_eeg = np.array([])
+		BlinkSpatialPattern = np.array([])
 
-	return no_blink_eeg, Blink_Artifact, ref
+	return no_blink_eeg, Blink_Artifact, ref, BlinkSpatialPattern
 
 
 
@@ -493,7 +506,7 @@ def armbr(X, blink_ch_id, fs, alpha=-1):
 		#for alpha in alpha_range:
 		
 		
-			X_purged, Bc, _ = Blink_Selection(X, good_eeg, good_blinks, alpha)
+			X_purged, Bc, _ , _= Blink_Selection(X, good_eeg, good_blinks, alpha)
 
 			
 			# if there are no np.nan the statement is True
@@ -512,17 +525,18 @@ def armbr(X, blink_ch_id, fs, alpha=-1):
 		# Find optimal alpha
 		if len(Delta) > 0:
 			best_alpha = alpha_range[np.argmax(Delta)]
-			[X_purged, Bc, Bmask] = Blink_Selection(X, good_eeg, good_blinks, best_alpha)
+			[X_purged, Bc, Bmask, BlinkSpatialPattern] = Blink_Selection(X, good_eeg, good_blinks, best_alpha)
 		else:
 			X_purged = X
 			Bc = np.array([])
 			Bmask = np.array([])
-			best_alpha = np.array([])
+			best_alpha = None
+			BlinkSpatialPattern = np.array([])
 	# Used if alpha is specified
 	else:
-		X_purged, Bc, Bmask = Blink_Selection(X, good_eeg, good_blinks, alpha)
+		X_purged, Bc, Bmask, BlinkSpatialPattern = Blink_Selection(X, good_eeg, good_blinks, alpha)
 		best_alpha = alpha
 		
-	return X_purged, best_alpha, Bmask, Bc
+	return X_purged, best_alpha, Bmask, Bc, BlinkSpatialPattern
 
 
