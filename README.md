@@ -78,6 +78,8 @@ disp(['========================================='])
 
 ## Option 2: EEGLAB structure
 
+Here, make sure you install EEGLAB and add the path to your directory. 
+We will create an EEGLAB structure and apply ARMBR to the EEG structure using `pop_ARMBR`. 
 ```
 clc
 close all
@@ -99,7 +101,7 @@ EEG = pop_importdata('dataformat','matlab','nbchan',128,'data', Sythentic_Blink_
 eeglab redraw
 
 
-blink_chan = ["C20", "C23"]; %or you can use blink_chan = [60, 61]; the index number
+blink_chan = ["C16", "C29"]; %or you can use blink_chan = [80, 93]; the index number
 [EEG] = pop_ARMBR(EEG, blink_chan);
 
 % Compute performance metrics
