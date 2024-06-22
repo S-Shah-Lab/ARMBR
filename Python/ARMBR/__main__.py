@@ -12,9 +12,9 @@ parser1 = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.
 parser1.add_argument( "-p", "--data-path",      default='', type=str, help='Full path of the EEG data. At this point, the code supports .fif, .edf, and .dat data.')
 parser1.add_argument( "-c", "--blink-channels", default='', type=str, help='Names or indices or blink reference channel(s).')
 parser1.add_argument( '-f', '--filter-band', metavar='l_freq_hz, h_freq_hz', default='1,40', type=str, help="String of cutoff for lower and upper frequency limits of the EEG (and the acoustic envelope, if used). Pass `None,None` to turn off filtering." )
-parser1.add_argument( "--save", action = 'store_true', help='Use to save the EEG data after blink removal.')
+parser1.add_argument( "--save", action = 'store_true', help='Use to save the EEG data after blink removal as a .fif mne raw object.')
 parser1.add_argument( "--save-path", default='', type=str, help='Directory where data is saved.')
-parser1.add_argument( "--plot", action = 'store_true', help='Use to plot the TRF.')
+parser1.add_argument( "--plot", action = 'store_true', help='Use to plot the cleaned EEG signals.')
 
 OPTS1 = parser1.parse_args()
 
