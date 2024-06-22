@@ -39,12 +39,12 @@ python -m pip install -e  ./Python
 
 # Matlab Implementation 
 
-ARMBR can be used in Python as follows:
+ARMBR can be used in Python as follows. First, make sure that your working directory is `Maltab`.
+
 
 ## Option 1: A generic script
 Here is how to implement ARMBR using Matlab on the semi-synthetic data used in the paper. 
-This implementation will work with any EEG array. For this example, make sure that your working directory is `Maltab`.
-
+This implementation will work with any EEG array. 
 ```
 clc; clear; close all;
 
@@ -126,7 +126,7 @@ disp(['========================================='])
 # Python Implementation
 
 
-ARMBR can be used in Python as follows:
+ARMBR can be used in Python as follows. First, make sure that your working directory is `Python`.
 
 ## Option 1: Run from terminal
 Open your terminal and use one of the following commands:
