@@ -31,13 +31,14 @@ else
 end
 
 
-[ARMBR_EEG, ~, ~, ~] = ARMBR(EEG_, blink_chan, Fs_);
+[ARMBR_EEG, ~, ~, ~, BlinkSpatialPattern] = ARMBR(EEG_, blink_chan, Fs_);
 
 EEG_size = size(ARMBR_EEG);
 if EEG_size(1) > EEG_size(2)
     ARMBR_EEG = ARMBR_EEG';
 end
 EEG.data = ARMBR_EEG;
+EEG.BlinkSpatialPattern = BlinkSpatialPattern;
 
 print('EEG is updated!')
 

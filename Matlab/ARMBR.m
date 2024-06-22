@@ -1,4 +1,4 @@
-function [no_blink_eeg, Opt_Alpha, Blink_Ref, Blink_Artifact] = ARMBR(orig_eeg, blink_chan_nbr, fs, Alpha)
+function [no_blink_eeg, Opt_Alpha, Blink_Ref, Blink_Artifact, BlinkSpatialPattern] = ARMBR(orig_eeg, blink_chan_nbr, fs, Alpha)
 % [no_blink_eeg, Opt_Alpha, Blink_Ref, Blink_Artifact] = ARMBR(orig_eeg, blink_chan_nbr, fs, Alpha)
 %
 % Inputs:
@@ -42,7 +42,7 @@ if Alpha == -1 % Run the automatic Alpha selection mechanism
 
     for alpha = alpha_range
         displayProgress(alpha, 10);
-        [~, Blink_Artifact, ~] = Blink_Selection(orig_eeg, good_eeg, good_blinks, alpha);
+        [~, Blink_Artifact, ~, ~] = Blink_Selection(orig_eeg, good_eeg, good_blinks, alpha);
                                                            
         if ~sum(isnan(Blink_Artifact))
             LPF = bandpass(Blink_Artifact,  [1 8],  fs, 'Steepness', 0.99);
@@ -61,7 +61,7 @@ if Alpha == -1 % Run the automatic Alpha selection mechanism
         [~, Delta_Max_inx] = max(Delta);
         Opt_Alpha = alpha_range(Delta_Max_inx);
          
-        [no_blink_eeg, Blink_Artifact, Blink_Ref] = Blink_Selection(orig_eeg, good_eeg, good_blinks, Opt_Alpha);
+        [no_blink_eeg, Blink_Artifact, Blink_Ref, BlinkSpatialPattern] = Blink_Selection(orig_eeg, good_eeg, good_blinks, Opt_Alpha);
                 
     else
         no_blink_eeg = orig_eeg;
@@ -73,7 +73,7 @@ if Alpha == -1 % Run the automatic Alpha selection mechanism
 
 else % if Alpha is manually entered
 
-    [no_blink_eeg, Blink_Artifact, Blink_Ref] = Blink_Selection(orig_eeg, good_eeg, good_blinks, Alpha);
+    [no_blink_eeg, Blink_Artifact, Blink_Ref, BlinkSpatialPattern] = Blink_Selection(orig_eeg, good_eeg, good_blinks, Alpha);
     Opt_Alpha = Alpha;
 
 end
