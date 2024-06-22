@@ -176,6 +176,7 @@ You can also use ARMBR with mne raw objects. Here is a script:
 ```
 from ARMBR_Library import *
 import mne
+import matplotlib.pyplot as plt
 
 raw = mne.io.read_raw_fif("..\SemiSyntheticData\Sub1\Sub1_Synthetic_Blink_Contaminated_EEG.fif", preload=True)
 raw.filter(l_freq=1, h_freq=40)
