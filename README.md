@@ -43,7 +43,7 @@ ARMBR can be used in Python as follows:
 
 ## Option 1: A generic script
 Here is how to implement ARMBR using Matlab on the semi-synthetic data used in the paper. 
-This implementation will work with any EEG array.
+This implementation will work with any EEG array. For this example, make sure that your working directory is `Maltab`.
 
 ```
 clc; clear; close all;
