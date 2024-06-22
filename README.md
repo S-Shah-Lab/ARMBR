@@ -131,14 +131,14 @@ ARMBR can be used in Python as follows:
 ## Option 1: Run from terminal
 Open your terminal and use one of the following commands:
 
-If you want to use the indices of the blink reference channels then use below, where -c "90" represents index 90: 
+If you want to use the indices of the blink reference channels then use below, where -c "79, 92" represents indices 79 and 92: 
 ```
-python -m ARMBR -p "YOUR_PATH\Sub1_Synthetic_Blink_Contaminated_EEG.fif" -c "90"   --plot
+python -m ARMBR -p "..\SemiSyntheticData\Sub1\Sub1_Synthetic_Blink_Contaminated_EEG.fif" -c "79,92" --plot
 ```
 
-If you want to use the name of the blink reference channels then use below, where -c "C16" represents channel name C16: 
+If you want to use the name of the blink reference channels then use below, where -c "C16,C29" represents channel name C16 and C29: 
 ```
-python -m ARMBR -p "YOUR_PATH\Sub1_Synthetic_Blink_Contaminated_EEG.fif" -c "C16"  --plot
+python -m ARMBR -p "..\SemiSyntheticData\Sub1\Sub1_Synthetic_Blink_Contaminated_EEG.fif" -c "C16,C29" --plot
 ```
 At this point, this command line supports data of .fif, .edf, and .dat type.
 
