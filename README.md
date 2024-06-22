@@ -147,7 +147,7 @@ At this point, this command line supports data of .fif, .edf, and .dat type.
 You can use a numpy array EEG with ARMBR. Here is a script:
 
 ```
-from ARMBR_Library import *
+from ARMBR.ARMBR_Library import *
 import mne
 import matplotlib.pyplot as plt
 
@@ -174,7 +174,7 @@ When `EEGGT` is available, you can run methods like `PerformanceMetrics()` and `
 You can also use ARMBR with mne raw objects. Here is a script:
 
 ```
-from ARMBR_Library import *
+from ARMBR.ARMBR_Library import *
 import mne
 import matplotlib.pyplot as plt
 
