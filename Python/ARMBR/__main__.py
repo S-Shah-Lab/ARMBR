@@ -1,13 +1,26 @@
+"""
+This is the Python implementation of the blink removal method from EEG signals; ARMBR. 
+The EEG data types that the code supposed are: .fif., .edf, and .dat files.
+
+Before you run the code, make sure you are in the Python directory of the ARMBR repository.
+
+If you want to use the indices of the blink reference channels then use below, where -c "79,92" represents indices 79 and 92:
+python -m ARMBR -p "..\SemiSyntheticData\Sub1\Sub1_Synthetic_Blink_Contaminated_EEG.fif" -c "79,92" --plot
+
+If you want to use the name of the blink reference channels then use below, where -c "C16,C29" represents channel name C16 and C29:
+python -m ARMBR -p "..\SemiSyntheticData\Sub1\Sub1_Synthetic_Blink_Contaminated_EEG.fif" -c "C16,C29" --plot
+
+
+By Ludvik Alkhoury, Giacomo Scanavini, and Jeremy hill
+June 25, 2024
+
+"""
 import argparse
-from ARMBR.ARMBR_Library import ARMBR
-import numpy as np
 import warnings
 import os
-import mne 
-import matplotlib.pyplot as plt
 
 
-parser1 = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
+parser1 = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter, prog='python -m ARMBR')
 
 parser1.add_argument( "-p", "--data-path",      default='', type=str, help='Full path of the EEG data. At this point, the code supports .fif, .edf, and .dat data.')
 parser1.add_argument( "-c", "--blink-channels", default='', type=str, help='Names or indices or blink reference channel(s).')
@@ -17,6 +30,11 @@ parser1.add_argument( "--save-path", default='', type=str, help='Directory where
 parser1.add_argument( "--plot", action = 'store_true', help='Use to plot the cleaned EEG signals.')
 
 OPTS1 = parser1.parse_args()
+
+import numpy as np
+import mne 
+
+from ARMBR.ARMBR_Library import ARMBR
 
 
 filter_band		= [float(f) for f in OPTS1.filter_band.replace(' ','').split(',')]
@@ -53,6 +71,8 @@ if len(OPTS1.data_path) > 0:
 		myARMBR.UnloadIntoRaw(raw)
 		
 		if OPTS1.plot:
+			import matplotlib.pyplot as plt
+			
 			raw.plot()
 			plt.show()
 		
