@@ -200,4 +200,12 @@ plt.show()
 With this code you can process the raw data using ARMBR and load it back to the raw object.
 
 
+# ARMBR Result Example
+Below is an example showing the blink contaminated region of a subject 1 before and after running ARMBR:
+![BeforeAfterARMBR](https://github.com/S-Shah-Lab/ARMBR/assets/66024269/2b374eb0-47d6-4d6d-84dc-864bae5e35bf)
+
+
+
+
+
 
