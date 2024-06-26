@@ -1,8 +1,7 @@
-import matplotlib.pyplot as plt
-import numpy as np
-from scipy import linalg, signal
 from math import nan
-from scipy.stats import pearsonr
+
+import numpy as np
+import scipy
 from tqdm import tqdm
 
 class ARMBR:
@@ -140,7 +139,7 @@ class ARMBR:
 			for chn in range( np.size(EEGGT, axis=1) ):
 				RMSE.append( np.sqrt(np.mean((EEGGT[:,chn] - CleanedEEG[:,chn])**2)) )
 				SNR.append( 10*np.log10(np.std(EEGGT[:,chn]) / np.std(EEGGT[:,chn] - CleanedEEG[:,chn])) )
-				correlation, _ = pearsonr(EEGGT[:,chn], CleanedEEG[:,chn])
+				correlation, _ = scipy.stats.pearsonr(EEGGT[:,chn], CleanedEEG[:,chn])
 				PearCorr.append(correlation)     			
 				
 			self.RMSE		= RMSE
@@ -170,12 +169,14 @@ class ARMBR:
 		
 		
 	def Plot(self):
+		
+		import matplotlib.pyplot as plt
+		
 		mvup=np.max(np.std(self.EEG))*10
 		CleanedEEG = rotate_arr(self.CleanedEEG)
 		EEG = rotate_arr(self.EEG)
+		
 		for chn in range( np.size(CleanedEEG, axis=1) ):
-				
-			
 			plt.plot(EEG[:,chn] - mvup*chn, 'k')
 			plt.plot(CleanedEEG[:,chn] - mvup*chn, 'r')
 				
@@ -514,8 +515,8 @@ def armbr(X, blink_ch_id, fs, alpha=-1):
 				# Bandpass filter between 1 and 8 Hz (FIR filter design using the window method)
 				# First parameter in firwin specifies the number of coefficients to use in the filter
 				# pass_zero=False: DC component gain set to 0
-				LPF = signal.firwin(10, [1, 8], pass_zero=False, fs=fs)
-				LPF = signal.filtfilt(LPF, 1, Bc.T).T
+				LPF = scipy.signal.firwin(10, [1, 8], pass_zero=False, fs=fs)
+				LPF = scipy.signal.filtfilt(LPF, 1, Bc.T).T
 				# Energies ratio
 				Delta.append(np.sum(LPF ** 2) / (np.sum((Bc - LPF) ** 2)))
 			else:
