@@ -179,10 +179,20 @@ class ARMBR:
 		for chn in range( np.size(CleanedEEG, axis=1) ):
 			plt.subplot(1,2,1)
 			plt.plot(EEG[:,chn] - mvup*chn, 'r')
+			#plt.ylim([-0.011, -0.007])	
+			plt.yticks([])
+			plt.xlabel('time (s)')
+			plt.title('Before ARMBR')
 			
 			plt.subplot(1,2,2)
 			plt.plot(CleanedEEG[:,chn] - mvup*chn, 'k')
-				
+			#plt.ylim([-0.011, -0.007])	
+			plt.yticks([])
+			plt.xlabel('time (s)')
+			plt.title('After ARMBR')
+			
+			
+		
 		plt.show()
 			
 		
