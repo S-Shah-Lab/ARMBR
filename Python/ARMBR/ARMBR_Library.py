@@ -177,8 +177,11 @@ class ARMBR:
 		EEG = rotate_arr(self.EEG)
 		
 		for chn in range( np.size(CleanedEEG, axis=1) ):
-			plt.plot(EEG[:,chn] - mvup*chn, 'k')
-			plt.plot(CleanedEEG[:,chn] - mvup*chn, 'r')
+			plt.subplot(1,2,1)
+			plt.plot(EEG[:,chn] - mvup*chn, 'r')
+			
+			plt.subplot(1,2,2)
+			plt.plot(CleanedEEG[:,chn] - mvup*chn, 'k')
 				
 		plt.show()
 			
