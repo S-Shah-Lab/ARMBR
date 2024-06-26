@@ -1,6 +1,6 @@
 """
 This is the Python implementation of the blink removal method from EEG signals; ARMBR. 
-The EEG data types that the code supposed are: .fif., .edf, and .dat files.
+The EEG data types that the code supposed are: .fif, .edf, and .dat files.
 
 Before you run the code, make sure you are in the Python directory of the ARMBR repository.
 
@@ -11,7 +11,7 @@ If you want to use the name of the blink reference channels then use below, wher
 python -m ARMBR -p "..\SemiSyntheticData\Sub1\Sub1_Synthetic_Blink_Contaminated_EEG.fif" -c "C16,C29" --plot
 
 
-By Ludvik Alkhoury, Giacomo Scanavini, and Jeremy hill
+Code by Ludvik Alkhoury, Giacomo Scanavini, and Jeremy hill
 June 25, 2024
 
 """
