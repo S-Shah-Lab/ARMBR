@@ -1,4 +1,5 @@
 from math import nan
+import copy
 
 import numpy as np
 import scipy
@@ -194,7 +195,21 @@ class ARMBR:
 			
 		
 		plt.show()
+		
+		
+		
+
+		
 			
+		
+	
+	def Copy(self):
+		
+		c = copy.deepcopy( self )
+		
+		print('Object copied!')
+		
+		return c
 		
 		
 		
