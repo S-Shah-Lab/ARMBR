@@ -40,6 +40,6 @@ end
 EEG.data = ARMBR_EEG;
 EEG.BlinkSpatialPattern = BlinkSpatialPattern;
 
-print('EEG is updated!')
+disp('EEG is updated!')
 
 end
