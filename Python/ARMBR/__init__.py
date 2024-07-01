@@ -1,2 +1,2 @@
-from .ARMBR_Library import ARMBR
+from .ARMBR_Library import *
 __version__ = ARMBR.Version
