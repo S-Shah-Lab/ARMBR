@@ -42,11 +42,12 @@ class ARMBR:
 		eeg_data 	   = rotate_arr(eeg_data)
 		self.EEG 				= eeg_data
 		self.Fs  				= raw.info['sfreq']
+		self.eeg_indices = eeg_indices
 		
 		return self
 		
 	def UnloadIntoRaw(self, raw):
-		raw._data = self.CleanedEEG.T
+		raw._data[self.eeg_indices, :] = self.CleanedEEG.T
 		
 		return self, raw
 
