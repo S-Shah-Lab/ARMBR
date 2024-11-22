@@ -7,7 +7,7 @@ function [no_blink_eeg, Opt_Alpha, Blink_Ref, Blink_Artifact, BlinkSpatialPatter
 %                   the most affected by blinks (EOG or Fp1,Fp2)
 %    fs             is the sampling frequency in Hz
 %    Alpha          is the blink level threshold. Alpha can be manually
-%                   entered. If set to -1, an automatic search is performed. 
+%                   entered. If set to -1, an automatic search is performed.
 %
 % Outputs:
 %    no_blink_eeg   multi-channel time-series after blinks are suppressed.
@@ -43,7 +43,7 @@ if Alpha == -1 % Run the automatic Alpha selection mechanism
     for alpha = alpha_range
         displayProgress(alpha, 10);
         [~, Blink_Artifact, ~, ~] = Blink_Selection(orig_eeg, good_eeg, good_blinks, alpha);
-                                                           
+
         if ~sum(isnan(Blink_Artifact))
             LPF = bandpass(Blink_Artifact,  [1 8],  fs, 'Steepness', 0.99);
             Delta = [Delta sum(LPF.^2)/(sum((Blink_Artifact - LPF).^2))];
@@ -51,18 +51,18 @@ if Alpha == -1 % Run the automatic Alpha selection mechanism
             break
         end
     end
-    
+
     % Remove NaN values
-    alpha_range = alpha_range(~isnan(Delta)); Delta = Delta(~isnan(Delta)); 
-    
+    alpha_range = alpha_range(~isnan(Delta)); Delta = Delta(~isnan(Delta));
+
 
     % Find optimal Alpha
     if ~isempty(Delta)
         [~, Delta_Max_inx] = max(Delta);
         Opt_Alpha = alpha_range(Delta_Max_inx);
-         
+
         [no_blink_eeg, Blink_Artifact, Blink_Ref, BlinkSpatialPattern] = Blink_Selection(orig_eeg, good_eeg, good_blinks, Opt_Alpha);
-                
+
     else
         no_blink_eeg = orig_eeg;
         Blink_Artifact = [];
