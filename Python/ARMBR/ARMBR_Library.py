@@ -6,58 +6,97 @@ import scipy
 from tqdm import tqdm
 
 class ARMBR:
-	Version = '1.0.0'  # @VERSION_INFO@
+	Version = '2.0.0'  # @VERSION_INFO@
 	
-	def __init__(self, 
-	EEG				=	np.array([]), 
-	EEGGT           = None,
-	CleanedEEG      = None,
-	Fs				=	None, 
-	ChannelsName	=	[],
-	ChannelsNameInx	=	[],
-	BlinkChannels	=	[],
-	Alpha			=	-1):
+	def __init__(	self, 
+					BlinkChannels	=	[],
+					Alpha			=	-1):
 		
-		self.EEG				= EEG
-		self.EEGGT       	    = EEGGT
-		self.CleanedEEG    		= EEGGT
-		self.Fs					= Fs
-		self.ChannelsName		= ChannelsName
-		self.ChannelsNameInx	= ChannelsNameInx
 		self.BlinkChannels		= BlinkChannels
-		self.BlinkChannelsInx	= BlinkChannels
 		self.Alpha 				= Alpha
 		
+		
+	def Fit(	self, 
+				raw, 
+				picks	=	"eeg", 
+				start	=	None, 
+				stop	=	None, 
+				verbose	=	True
+			):
+					
+		if start is not None and stop is not None:
+			# User provided manual segment (in samples)
+			data = raw.get_data(picks=picks, start=start, stop=stop)
+			if verbose:
+				t_start = start / raw.info['sfreq']
+				t_stop = (stop - 1) / raw.info['sfreq']
+				print(f"Using manual segment from {t_start:.2f}s to {t_stop:.2f}s.")
+		else:
+			n_samples = raw.n_times
+			mask = np.ones(n_samples, dtype=bool)
 
-	def ImportFromRaw(self, raw):
-		# Load EEG data from mne object
-		eeg_indices				= [index for index, word in enumerate(raw.get_channel_types()) if word == 'eeg']
-		eeg_data				= raw._data[eeg_indices, :]
-		
-		ChannelsName = []
-		for i in eeg_indices:
-			ChannelsName.append(raw.ch_names[i])
-		self.ChannelsName	 	= ChannelsName
-		self.ChannelsNameInx	= eeg_indices
-		eeg_data 	   = rotate_arr(eeg_data)
-		self.EEG 				= eeg_data
+			# Step 1: Drop BAD_ segments
+			for annot in raw.annotations:
+				if annot['description'].startswith("BAD_"):
+					onset, duration = annot['onset'], annot['duration']
+					bad_start, bad_stop = raw.time_as_index([onset, onset + duration])
+					mask[bad_start:bad_stop] = False
+					if verbose:
+						print(f"Dropped {annot['description']} segment: {onset:.2f}s to {onset + duration:.2f}s")
+
+			# Step 2: Include only armbr_fit segments
+			armbr_annots = [
+				annot for annot in raw.annotations 
+				if "armbr_fit" in annot['description'].lower()
+			]
+
+			if not armbr_annots:
+				# No armbr_fit found, use all non-BAD data
+				data = raw.get_data(picks=picks)[:, mask]
+				if verbose:
+					total_secs = mask.sum() / raw.info['sfreq']
+					print(f"No 'armbr_fit' found. Using {total_secs:.2f} seconds of non-BAD data.")
+			else:
+				segments = []
+				for annot in armbr_annots:
+					onset, duration = annot['onset'], annot['duration']
+					seg_start, seg_stop = raw.time_as_index([onset, onset + duration])
+					segment_mask = mask[seg_start:seg_stop]
+					if np.any(segment_mask):
+						segment_data = raw.get_data(picks=picks, start=seg_start, stop=seg_stop)
+						segments.append(segment_data[:, segment_mask])
+						if verbose:
+							start_sec = seg_start / raw.info['sfreq']
+							stop_sec = (seg_stop - 1) / raw.info['sfreq']
+							duration_sec = segment_mask.sum() / raw.info['sfreq']
+							print(f"Included armbr_fit: {start_sec:.2f}s to {stop_sec:.2f}s ({duration_sec:.2f}s used)")
+				data = np.concatenate(segments, axis=1) if segments else np.empty((len(picks), 0))
+
+		# Save output to class variables
+		self.EEG = rotate_arr(data)
 		self.Fs  				= raw.info['sfreq']
-		self.eeg_indices = eeg_indices
+		self.ChannelsName	 	= raw.ch_names
+		self.ChannelsNameInx	= [index for index, word in enumerate(raw.get_channel_types()) if word == 'eeg']
+		self.eeg_indices		= [index for index, word in enumerate(raw.get_channel_types()) if word == 'eeg']
 		
+		self.ARMBR(self.BlinkChannels)
+	
+	
+	def Apply(self, raw, picks="eeg"):
+		EEG_with_blinks = rotate_arr( raw.get_data(picks=picks) )
+		EEG_without_blinks = EEG_with_blinks.dot(self.BlinkSpatialPattern)
+		
+		raw.apply_function(lambda x: EEG_without_blinks.T, picks=picks, channel_wise=False)
+
 		return self
 		
-	def UnloadIntoRaw(self, raw):
-		raw._data[self.eeg_indices, :] = self.CleanedEEG.T
-		
-		return self, raw
 
 		
 	def GetBlinkChannels(self, blink_chan):
 		
 		# check if blink_chan contains only integers or only strings
 		
-		
-		all_int = all(s.isdigit() for s in blink_chan)
+		all_int = all(isinstance(s, int) or (isinstance(s, str) and s.isdigit()) for s in blink_chan)
 		all_str = all(isinstance(element, str) for element in blink_chan)
 		
 		if all_int:
@@ -85,7 +124,6 @@ class ARMBR:
 			
 		
 
-		
 		
 		
 		
