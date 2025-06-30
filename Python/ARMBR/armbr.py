@@ -161,7 +161,7 @@ class ARMBR:
 		if start is not None and stop is not None:
 			# User provided manual segment (in samples)
 			data = raw.get_data(picks=picks, start=int(start*raw.info['sfreq']), stop=int(stop*raw.info['sfreq'])) 
-			LOGGER.info(f"Using manual segment from {start:.2f}s to {stop:.2f}s.")
+			LOGGER.info("Using manual segment from {:.2f}s to {:.2f}s.".format(start, stop))
 		else:
 			n_samples = raw.n_times
 			mask = np.ones(n_samples, dtype=bool)
@@ -175,7 +175,12 @@ class ARMBR:
 
 					bad_start, bad_stop = raw.time_as_index([onset - raw.first_time, onset + duration - raw.first_time])
 					mask[bad_start:bad_stop] = False
-					LOGGER.info(f"Dropped {annot['description']} segment: {bad_start/raw.info['sfreq']:.2f}s to {bad_stop/raw.info['sfreq'] :.2f}s")
+					LOGGER.info("Dropped {} segment: {:.2f}s to {:.2f}s".format(
+									annot['description'],
+									bad_start / raw.info['sfreq'],
+									bad_stop / raw.info['sfreq']
+								))
+
 
 			# Step 2: Include only armbr_fit segments
 			armbr_annots = [
@@ -187,7 +192,7 @@ class ARMBR:
 				# No armbr_fit found, use all non-BAD data
 				data = raw.get_data(picks=picks)[:, mask]
 				total_secs = mask.sum() / raw.info['sfreq']
-				LOGGER.info(f"No 'armbr_fit' found. Using {total_secs:.2f} seconds of non-BAD data.")
+				LOGGER.info("No 'armbr_fit' found. Using {:.2f} seconds of non-BAD data.".format(total_secs))
 			else:
 				segments = []
 				for annot in armbr_annots:
@@ -201,7 +206,8 @@ class ARMBR:
 						stop_sec = ((seg_stop - 1) / raw.info['sfreq'])  
 
 						duration_sec = segment_mask.sum() / raw.info['sfreq']
-						LOGGER.info(f"Included armbr_fit: {start_sec:.2f}s to {stop_sec:.2f}s ({duration_sec:.2f}s used)")
+						LOGGER.info("Included armbr_fit: {:.2f}s to {:.2f}s ({:.2f}s used)".format(start_sec, stop_sec, duration_sec))
+
 				data = np.concatenate(segments, axis=1) if segments else np.empty((len(picks), 0))
 
 		# Save output to class variables
@@ -421,7 +427,7 @@ class ARMBR:
 				show=show,
 				vlim=vlim
 			)
-			axes[i].set_title(f'Component {i+1}', fontsize=10)
+			axes[i].set_title('Component {}'.format(i + 1), fontsize=10)
 
 
 		# Shared colorbar
@@ -495,7 +501,7 @@ class ARMBR:
 
 		if is_all_int:
 			self.ch_name_inx = [int(ch) for ch in blink_chs]
-			LOGGER.info(f"Blink channels (indices): {self.ch_name_inx}")
+			LOGGER.info("Blink channels (indices): {}".format(self.ch_name_inx))
 
 		elif is_all_str:
 			self.ch_name = blink_chs  # Save user-specified names
@@ -512,15 +518,15 @@ class ARMBR:
 
 			self.ch_name = valid_names
 			self.ch_name_inx = ch_indices
-			LOGGER.info(f"Blink channels (names): {self.ch_name}")
+			LOGGER.info("Blink channels (names): {}".format(self.ch_name))
 
 		else:
 			raise ValueError("Blink channel list must contain only channel names or only indices.")
 
-					
-			
 
-		
+
+
+
 	def _run_armbr(self, blink_chs):
 		"""
 		Internal method to execute the ARMBR algorithm on training data.
@@ -964,9 +970,9 @@ def _projectout(X, X_reduced, blink_mask, mask_in=None):
 
 	# Input validation
 	if mask_in.size != n_channels:
-		raise ValueError(f"mask_in size {mask_in.size} does not match number of channels {n_channels}.")
+		raise ValueError("mask_in size {} does not match number of channels {}.".format(mask_in.size, n_channels))
 	if blink_mask.shape[0] != n_samples:
-		raise ValueError(f"blink_mask sample count {blink_mask.shape[0]} does not match X sample count {n_samples}.")
+		raise ValueError("blink_mask sample count {} does not match X sample count {}.".format(blink_mask.shape[0], n_samples))
 
 	mask_out = ~mask_in
 	eye = np.eye(n_channels)
