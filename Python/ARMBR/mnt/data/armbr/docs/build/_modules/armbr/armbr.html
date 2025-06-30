@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>armbr.armbr &#8212; ARMBR Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=d1102ebc" />
+    <link rel="stylesheet" type="text/css" href="../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css?v=27fed22d" />
+    <script src="../../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for armbr.armbr</h1><div class="highlight"><pre>
+<span></span><span class="c1"># Authors:	Ludvik Alkhoury &lt;Ludvik.alkhoury@gmail.com&gt;</span>
+<span class="c1">#			Giacomo Scanavini &lt;scanavini.giacomo@gmail.com&gt;</span>
+<span class="c1">#			N. Jeremy Hill &lt;jezhill@gmail.com&gt;</span>
+<span class="c1"># License: BSD-3-Clause</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Artifact-reference multivariate backward regression (ARMBR): a novel method for EEG blink artifact removal with minimal data requirements</span>
+
+<span class="sd">ARMBR is a lightweight and easy-to-use method for blink artifact removal from EEG signals using multivariate backward regression. </span>
+<span class="sd">The algorithm detects the times at which eye blinks occur and then estimates their linear scalp projection by regressing a simplified, </span>
+<span class="sd">time-locked reference signal against the multichannel EEG. This projection is used to suppress blink-related components while preserving </span>
+<span class="sd">underlying brain signals. ARMBR requires minimal training data, does not depend on dedicated EOG channels, and operates robustly in both </span>
+<span class="sd">offline and real-time (online) settings, including BCI applications.</span>
+
+<span class="sd">This module implements the ARMBR algorithm, described in:</span>
+
+<span class="sd">Alkhoury L, Scanavini G, Louviot S, Radanovic A, Shah SA, Hill NJ. (2025).</span>
+<span class="sd">&quot;Artifact-reference multivariate backward regression (ARMBR): a novel method for EEG blink artifact removal with minimal data requirements.&quot;</span>
+<span class="sd">Journal of Neural Engineering, 22(3), 036048.</span>
+<span class="sd">https://doi.org/10.1088/1741-2552/ade566</span>
+
+<span class="sd">(see ARMBR.bibtex for the BibTeX entry)</span>
+
+
+<span class="sd">The core algorithm supports both standalone and MNE integration via the `ARMBR` class:</span>
+<span class="sd">from armbr import run_armbr   # core non-MNE-dependent code (just needs numpy)</span>
+<span class="sd">from armbr import ARMBR       # MNE-compatible wrapper class</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+
+
+<span class="kn">import</span> <span class="nn">copy</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="k">try</span><span class="p">:</span> <span class="kn">import</span> <span class="nn">mne</span>
+<span class="k">except</span><span class="p">:</span>
+	<span class="n">VERBOSE</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span>
+	<span class="k">class</span> <span class="nc">LOGGER</span><span class="p">:</span>
+		<span class="k">def</span> <span class="nf">info</span><span class="p">(</span><span class="n">x</span><span class="p">):</span> <span class="nb">print</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="k">else</span><span class="p">:</span>
+	<span class="kn">import</span> <span class="nn">mne.utils</span><span class="p">;</span> <span class="kn">from</span> <span class="nn">mne.utils</span> <span class="kn">import</span> <span class="n">verbose</span> <span class="k">as</span> <span class="n">VERBOSE</span><span class="p">,</span> <span class="n">logger</span> <span class="k">as</span> <span class="n">LOGGER</span>
+	<span class="kn">import</span> <span class="nn">mne.filter</span>
+
+<span class="n">__version__</span> <span class="o">=</span> <span class="s1">&#39;2.0.0&#39;</span>  <span class="c1"># @VERSION_INFO@</span>
+
+
+<div class="viewcode-block" id="ARMBR">
+<a class="viewcode-back" href="../../armbr.html#armbr.ARMBR">[docs]</a>
+<span class="k">class</span> <span class="nc">ARMBR</span><span class="p">:</span>
+<span class="w">	</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">	MNE-compatible wrapper for ARMBR, a blink artifact removal algorithm for EEG.</span>
+
+<span class="sd">	ARMBR identifies and suppresses blink artifacts using multivariate backward</span>
+<span class="sd">	regression. It leverages a binarized blink reference signal to estimate and</span>
+<span class="sd">	project out blink-related spatial components. The method requires only a small</span>
+<span class="sd">	amount of training data and works without requiring ICA or dedicated EOG</span>
+<span class="sd">	channels. It is especially suitable for real-time and online BCI scenarios.</span>
+
+<span class="sd">	Parameters</span>
+<span class="sd">	----------</span>
+<span class="sd">	ch_name : list of str | list of int | None</span>
+<span class="sd">		Names or indices of EEG channels highly affected by blinks (e.g. Fp1, Fp2).</span>
+<span class="sd">		These are used to construct the blink reference signal. If None, defaults to [].</span>
+<span class="sd">	alpha : float | &#39;auto&#39;</span>
+<span class="sd">		Blink detection threshold factor. If &#39;auto&#39;, ARMBR selects the threshold</span>
+<span class="sd">		automatically using method described in Section 4. Threshold selection (see Alkhoury et al., 2025).</span>
+
+<span class="sd">	References</span>
+<span class="sd">	----------</span>
+<span class="sd">	L. Alkhoury et al. (2025), Journal of Neural Engineering, 22(3), 036048.</span>
+<span class="sd">	https://doi.org/10.1088/1741-2552/ade566</span>
+
+<span class="sd">	&quot;&quot;&quot;</span>
+	
+	<span class="n">bibtex</span> <span class="o">=</span> <span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">		@article{alkhoury2025_armbr,</span>
+<span class="s2">			title={Artifact-reference multivariate backward regression (ARMBR): a novel method for EEG blink artifact removal with minimal data requirements},</span>
+<span class="s2">			author={Alkhoury, Ludvik and Scanavini, G and Louviot, S and Radanovic, A and Shah, SA and Hill, NJ},</span>
+<span class="s2">			journal={Journal of Neural Engineering},</span>
+<span class="s2">			volume=</span><span class="si">{22}</span><span class="s2">,</span>
+<span class="s2">			number=</span><span class="si">{3}</span><span class="s2">,</span>
+<span class="s2">			pages=</span><span class="si">{036048}</span><span class="s2">,</span>
+<span class="s2">			year=</span><span class="si">{2025}</span><span class="s2">,</span>
+<span class="s2">			doi={10.1088/1741-2552/ade566}</span>
+<span class="s2">		}</span>
+<span class="s2">	&quot;&quot;&quot;</span>
+	
+<div class="viewcode-block" id="ARMBR.__init__">
+<a class="viewcode-back" href="../../armbr.html#armbr.ARMBR.__init__">[docs]</a>
+	<span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>	<span class="bp">self</span><span class="p">,</span> 
+					<span class="n">ch_name</span> <span class="o">=</span>	<span class="kc">None</span><span class="p">,</span>
+					<span class="n">alpha</span>   <span class="o">=</span>	<span class="s1">&#39;auto&#39;</span><span class="p">,</span>
+					<span class="p">):</span>
+<span class="w">		</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">		Initialize ARMBR with optional blink channel specification and threshold strategy.</span>
+
+<span class="sd">		Parameters</span>
+<span class="sd">		----------</span>
+<span class="sd">		ch_name : list of str | list of int | None</span>
+<span class="sd">			Names or indices of EEG channels expected to show prominent blink activity.</span>
+<span class="sd">			Common choices include Fp1, Fp2, or frontal channels near the eyes.</span>
+<span class="sd">		alpha : float | &#39;auto&#39;</span>
+<span class="sd">			Blink detection threshold multiplier. If &#39;auto&#39;, the optimal threshold</span>
+<span class="sd">			is selected automatically by maximizing the low-frequency-to-high-frequency</span>
+<span class="sd">			energy ratio in the extracted blink component.</span>
+
+<span class="sd">		Notes</span>
+<span class="sd">		-----</span>
+<span class="sd">		The user-specified channels should capture prominent blink deflections.</span>
+<span class="sd">		No EOG channels are required.</span>
+<span class="sd">		&quot;&quot;&quot;</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">ch_name</span>	<span class="o">=</span> <span class="n">ch_name</span> <span class="ow">or</span> <span class="p">[]</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">alpha</span> 		<span class="o">=</span> <span class="n">alpha</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">is_fitted</span>	<span class="o">=</span> <span class="kc">False</span>  </div>
+
+		
+		
+<div class="viewcode-block" id="ARMBR.fit">
+<a class="viewcode-back" href="../../armbr.html#armbr.ARMBR.fit">[docs]</a>
+	<span class="nd">@VERBOSE</span>
+	<span class="k">def</span> <span class="nf">fit</span><span class="p">(</span>	<span class="bp">self</span><span class="p">,</span> 
+				<span class="n">raw</span><span class="p">,</span> 
+				<span class="n">picks</span>	<span class="o">=</span>	<span class="s2">&quot;eeg&quot;</span><span class="p">,</span> 
+				<span class="n">start</span>	<span class="o">=</span>	<span class="kc">None</span><span class="p">,</span> 
+				<span class="n">stop</span>	<span class="o">=</span>	<span class="kc">None</span><span class="p">,</span> 
+				<span class="n">verbose</span>	<span class="o">=</span>	<span class="kc">None</span>
+			<span class="p">):</span>
+<span class="w">		</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">		Fit the ARMBR model using raw EEG data.</span>
+
+<span class="sd">		This method prepares the data for blink artifact removal by identifying</span>
+<span class="sd">		clean EEG segments, extracting the relevant samples, and computing the</span>
+<span class="sd">		ARMBR spatial projection. Training can use either manually specified </span>
+<span class="sd">		time ranges, annotated segments labeled &quot;armbr_fit&quot;, or all non-rejected</span>
+<span class="sd">		data (excluding &#39;BAD_&#39; annotations).</span>
+
+<span class="sd">		Parameters</span>
+<span class="sd">		----------</span>
+<span class="sd">		raw : instance of mne.io.BaseRaw</span>
+<span class="sd">			Continuous raw EEG recording.</span>
+<span class="sd">		picks : str | list | slice | None</span>
+<span class="sd">			Channels to include. Defaults to &#39;eeg&#39;. Can be a string like &#39;eeg&#39;,</span>
+<span class="sd">			a list of channel names, or indices.</span>
+<span class="sd">		start : float | None</span>
+<span class="sd">			Start time in seconds for fitting. If provided, overrides annotations</span>
+<span class="sd">			and uses this exact time range.</span>
+<span class="sd">		stop : float | None</span>
+<span class="sd">			Stop time in seconds for fitting. If provided with `start`, overrides</span>
+<span class="sd">			annotations and uses this exact time range.</span>
+<span class="sd">		verbose : bool | str | int | None</span>
+<span class="sd">			Controls verbosity of the log output.</span>
+
+<span class="sd">		Returns</span>
+<span class="sd">		-------</span>
+<span class="sd">		self : instance of ARMBR</span>
+<span class="sd">			The fitted instance, with spatial weights and state stored.</span>
+
+<span class="sd">		Notes</span>
+<span class="sd">		-----</span>
+<span class="sd">		If &#39;armbr_fit&#39; annotations are present, those segments are prioritized.</span>
+<span class="sd">		Otherwise, all data not marked by &#39;BAD_&#39; annotations is used. If both</span>
+<span class="sd">		`start` and `stop` are provided, these override annotations entirely.</span>
+<span class="sd">		The model must be fitted before calling `.apply()` or `.plot()`.</span>
+<span class="sd">		&quot;&quot;&quot;</span>
+
+		
+		<span class="k">if</span> <span class="n">start</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">stop</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+			<span class="c1"># User provided manual segment (in samples)</span>
+			<span class="n">data</span> <span class="o">=</span> <span class="n">raw</span><span class="o">.</span><span class="n">get_data</span><span class="p">(</span><span class="n">picks</span><span class="o">=</span><span class="n">picks</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">start</span><span class="o">*</span><span class="n">raw</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;sfreq&#39;</span><span class="p">]),</span> <span class="n">stop</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">stop</span><span class="o">*</span><span class="n">raw</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;sfreq&#39;</span><span class="p">]))</span> 
+			<span class="n">LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Using manual segment from </span><span class="si">{:.2f}</span><span class="s2">s to </span><span class="si">{:.2f}</span><span class="s2">s.&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">stop</span><span class="p">))</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="n">n_samples</span> <span class="o">=</span> <span class="n">raw</span><span class="o">.</span><span class="n">n_times</span>
+			<span class="n">mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">n_samples</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">bool</span><span class="p">)</span>
+
+			<span class="c1"># Step 1: Drop BAD_ segments</span>
+			<span class="k">for</span> <span class="n">annot</span> <span class="ow">in</span> <span class="n">raw</span><span class="o">.</span><span class="n">annotations</span><span class="p">:</span>
+				<span class="k">if</span> <span class="n">annot</span><span class="p">[</span><span class="s1">&#39;description&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;BAD_&quot;</span><span class="p">):</span>
+					<span class="n">onset</span><span class="p">,</span> <span class="n">duration</span> <span class="o">=</span> <span class="n">annot</span><span class="p">[</span><span class="s1">&#39;onset&#39;</span><span class="p">],</span> <span class="n">annot</span><span class="p">[</span><span class="s1">&#39;duration&#39;</span><span class="p">]</span>
+					<span class="nb">print</span><span class="p">(</span><span class="n">onset</span><span class="p">)</span>
+					<span class="nb">print</span><span class="p">(</span><span class="n">raw</span><span class="o">.</span><span class="n">first_time</span><span class="p">)</span>
+
+					<span class="n">bad_start</span><span class="p">,</span> <span class="n">bad_stop</span> <span class="o">=</span> <span class="n">raw</span><span class="o">.</span><span class="n">time_as_index</span><span class="p">([</span><span class="n">onset</span> <span class="o">-</span> <span class="n">raw</span><span class="o">.</span><span class="n">first_time</span><span class="p">,</span> <span class="n">onset</span> <span class="o">+</span> <span class="n">duration</span> <span class="o">-</span> <span class="n">raw</span><span class="o">.</span><span class="n">first_time</span><span class="p">])</span>
+					<span class="n">mask</span><span class="p">[</span><span class="n">bad_start</span><span class="p">:</span><span class="n">bad_stop</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
+					<span class="n">LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Dropped </span><span class="si">{}</span><span class="s2"> segment: </span><span class="si">{:.2f}</span><span class="s2">s to </span><span class="si">{:.2f}</span><span class="s2">s&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+									<span class="n">annot</span><span class="p">[</span><span class="s1">&#39;description&#39;</span><span class="p">],</span>
+									<span class="n">bad_start</span> <span class="o">/</span> <span class="n">raw</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;sfreq&#39;</span><span class="p">],</span>
+									<span class="n">bad_stop</span> <span class="o">/</span> <span class="n">raw</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;sfreq&#39;</span><span class="p">]</span>
+								<span class="p">))</span>
+
+
+			<span class="c1"># Step 2: Include only armbr_fit segments</span>
+			<span class="n">armbr_annots</span> <span class="o">=</span> <span class="p">[</span>
+				<span class="n">annot</span> <span class="k">for</span> <span class="n">annot</span> <span class="ow">in</span> <span class="n">raw</span><span class="o">.</span><span class="n">annotations</span> 
+				<span class="k">if</span> <span class="n">annot</span><span class="p">[</span><span class="s1">&#39;description&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;armbr_fit&quot;</span>
+			<span class="p">]</span>
+
+			<span class="k">if</span> <span class="ow">not</span> <span class="n">armbr_annots</span><span class="p">:</span>
+				<span class="c1"># No armbr_fit found, use all non-BAD data</span>
+				<span class="n">data</span> <span class="o">=</span> <span class="n">raw</span><span class="o">.</span><span class="n">get_data</span><span class="p">(</span><span class="n">picks</span><span class="o">=</span><span class="n">picks</span><span class="p">)[:,</span> <span class="n">mask</span><span class="p">]</span>
+				<span class="n">total_secs</span> <span class="o">=</span> <span class="n">mask</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">/</span> <span class="n">raw</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;sfreq&#39;</span><span class="p">]</span>
+				<span class="n">LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;No &#39;armbr_fit&#39; found. Using </span><span class="si">{:.2f}</span><span class="s2"> seconds of non-BAD data.&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">total_secs</span><span class="p">))</span>
+			<span class="k">else</span><span class="p">:</span>
+				<span class="n">segments</span> <span class="o">=</span> <span class="p">[]</span>
+				<span class="k">for</span> <span class="n">annot</span> <span class="ow">in</span> <span class="n">armbr_annots</span><span class="p">:</span>
+					<span class="n">onset</span><span class="p">,</span> <span class="n">duration</span> <span class="o">=</span> <span class="n">annot</span><span class="p">[</span><span class="s1">&#39;onset&#39;</span><span class="p">],</span> <span class="n">annot</span><span class="p">[</span><span class="s1">&#39;duration&#39;</span><span class="p">]</span>
+					<span class="n">seg_start</span><span class="p">,</span> <span class="n">seg_stop</span> <span class="o">=</span> <span class="n">raw</span><span class="o">.</span><span class="n">time_as_index</span><span class="p">([</span><span class="n">onset</span><span class="o">-</span> <span class="n">raw</span><span class="o">.</span><span class="n">first_time</span><span class="p">,</span> <span class="n">onset</span> <span class="o">+</span> <span class="n">duration</span><span class="o">-</span> <span class="n">raw</span><span class="o">.</span><span class="n">first_time</span><span class="p">])</span>
+					<span class="n">segment_mask</span> <span class="o">=</span> <span class="n">mask</span><span class="p">[</span><span class="n">seg_start</span><span class="p">:</span><span class="n">seg_stop</span><span class="p">]</span>
+					<span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">any</span><span class="p">(</span><span class="n">segment_mask</span><span class="p">):</span>
+						<span class="n">segment_data</span> <span class="o">=</span> <span class="n">raw</span><span class="o">.</span><span class="n">get_data</span><span class="p">(</span><span class="n">picks</span><span class="o">=</span><span class="n">picks</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="n">seg_start</span><span class="p">,</span> <span class="n">stop</span><span class="o">=</span><span class="n">seg_stop</span><span class="p">)</span>
+						<span class="n">segments</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">segment_data</span><span class="p">[:,</span> <span class="n">segment_mask</span><span class="p">])</span>
+						<span class="n">start_sec</span> <span class="o">=</span> <span class="p">(</span><span class="n">seg_start</span> <span class="o">/</span> <span class="n">raw</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;sfreq&#39;</span><span class="p">])</span> 
+						<span class="n">stop_sec</span> <span class="o">=</span> <span class="p">((</span><span class="n">seg_stop</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">/</span> <span class="n">raw</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;sfreq&#39;</span><span class="p">])</span>  
+
+						<span class="n">duration_sec</span> <span class="o">=</span> <span class="n">segment_mask</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">/</span> <span class="n">raw</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;sfreq&#39;</span><span class="p">]</span>
+						<span class="n">LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Included armbr_fit: </span><span class="si">{:.2f}</span><span class="s2">s to </span><span class="si">{:.2f}</span><span class="s2">s (</span><span class="si">{:.2f}</span><span class="s2">s used)&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">start_sec</span><span class="p">,</span> <span class="n">stop_sec</span><span class="p">,</span> <span class="n">duration_sec</span><span class="p">))</span>
+
+				<span class="n">data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">segments</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span> <span class="k">if</span> <span class="n">segments</span> <span class="k">else</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">picks</span><span class="p">),</span> <span class="mi">0</span><span class="p">))</span>
+
+		<span class="c1"># Save output to class variables</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">_eeg_data</span>			<span class="o">=</span> <span class="n">_rotate_arr</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">sfreq</span>  			<span class="o">=</span> <span class="n">raw</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;sfreq&#39;</span><span class="p">]</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">ch_names</span>	 		<span class="o">=</span> <span class="n">raw</span><span class="o">.</span><span class="n">ch_names</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">_channel_indices</span>	<span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">ch_type</span>  <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">raw</span><span class="o">.</span><span class="n">get_channel_types</span><span class="p">())</span> <span class="k">if</span> <span class="n">ch_type</span> <span class="o">==</span> <span class="s1">&#39;eeg&#39;</span><span class="p">]</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">_eeg_indices</span>		<span class="o">=</span> <span class="p">[</span><span class="n">raw</span><span class="o">.</span><span class="n">ch_names</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">ch</span><span class="p">)</span> <span class="k">for</span> <span class="n">ch</span> <span class="ow">in</span> <span class="n">raw</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span><span class="o">.</span><span class="n">pick</span><span class="p">(</span><span class="s1">&#39;eeg&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">ch_names</span><span class="p">]</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">_raw_info</span>			<span class="o">=</span> <span class="n">raw</span><span class="o">.</span><span class="n">info</span>
+		
+		<span class="bp">self</span><span class="o">.</span><span class="n">_run_armbr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ch_name</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">is_fitted</span> <span class="o">=</span> <span class="kc">True</span>  
+		
+		<span class="n">LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;ARMBR model fitting complete.&quot;</span><span class="p">)</span>
+		
+		<span class="k">return</span> <span class="bp">self</span></div>
+
+		
+	
+<div class="viewcode-block" id="ARMBR.apply">
+<a class="viewcode-back" href="../../armbr.html#armbr.ARMBR.apply">[docs]</a>
+	<span class="nd">@VERBOSE</span>
+	<span class="k">def</span> <span class="nf">apply</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">raw</span><span class="p">,</span> <span class="n">picks</span><span class="o">=</span><span class="s2">&quot;eeg&quot;</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">		</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">		Apply ARMBR blink removal to raw EEG data.</span>
+<span class="sd">		</span>
+<span class="sd">		This method removes blink artifacts from the specified channels using</span>
+<span class="sd">		the spatial projection matrix estimated during `.fit()`. The projection</span>
+<span class="sd">		is applied directly to the data via MNE&#39;s `apply_function`.</span>
+
+<span class="sd">		Parameters</span>
+<span class="sd">		----------</span>
+<span class="sd">		raw : instance of mne.io.BaseRaw</span>
+<span class="sd">			The raw data to clean.</span>
+<span class="sd">		picks : str | list | None</span>
+<span class="sd">			Channel picks to apply ARMBR to. Defaults to &#39;eeg&#39;.</span>
+<span class="sd">		verbose : bool | str | int | None</span>
+<span class="sd">			Control verbosity of the logging output.</span>
+
+<span class="sd">		Returns</span>
+<span class="sd">		-------</span>
+<span class="sd">		self : instance of ARMBR</span>
+<span class="sd">			Returns the current instance with ARMBR applied.</span>
+
+<span class="sd">		Raises</span>
+<span class="sd">		------</span>
+<span class="sd">		RuntimeError</span>
+<span class="sd">			If `.fit()` has not been called before this method.</span>
+<span class="sd">		ValueError</span>
+<span class="sd">			If the raw object is not preloaded (since in-place editing is required).</span>
+
+<span class="sd">		Notes</span>
+<span class="sd">		-----</span>
+<span class="sd">		This modifies the input `raw` object in-place. To preserve the original,</span>
+<span class="sd">		use `.copy()` before calling `.apply()`.</span>
+<span class="sd">		&quot;&quot;&quot;</span>
+
+		<span class="kn">import</span> <span class="nn">mne.utils</span>
+		
+		<span class="k">if</span> <span class="ow">not</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;is_fitted&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+			<span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;You must call .fit() before .apply().&quot;</span><span class="p">)</span>
+	
+		
+		<span class="c1"># Check if raw is preloaded (required to modify data)</span>
+		<span class="n">mne</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">_check_preload</span><span class="p">(</span><span class="n">raw</span><span class="p">,</span> <span class="s1">&#39;apply&#39;</span><span class="p">)</span>
+	
+		<span class="n">eeg_raw</span>		<span class="o">=</span> <span class="n">_rotate_arr</span><span class="p">(</span> <span class="n">raw</span><span class="o">.</span><span class="n">get_data</span><span class="p">(</span><span class="n">picks</span><span class="o">=</span><span class="n">picks</span><span class="p">)</span> <span class="p">)</span>
+		<span class="n">eeg_clean</span>	<span class="o">=</span> <span class="n">eeg_raw</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">blink_projection_matrix</span><span class="p">)</span>
+		
+		<span class="c1"># Apply cleaned data back to Raw object</span>
+		<span class="n">raw</span><span class="o">.</span><span class="n">apply_function</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">eeg_clean</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="n">picks</span><span class="o">=</span><span class="n">picks</span><span class="p">,</span> <span class="n">channel_wise</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+		
+		<span class="n">LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;ARMBR blink suppression applied to raw data.&quot;</span><span class="p">)</span>
+		
+		<span class="k">return</span> <span class="bp">self</span></div>
+
+		
+		
+<div class="viewcode-block" id="ARMBR.plot">
+<a class="viewcode-back" href="../../armbr.html#armbr.ARMBR.plot">[docs]</a>
+	<span class="nd">@VERBOSE</span>
+	<span class="k">def</span> <span class="nf">plot</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">show</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">		</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">		Plot EEG signals before and after ARMBR cleaning.</span>
+<span class="sd">		</span>
+<span class="sd">		This diagnostic plot shows side-by-side traces of the original and</span>
+<span class="sd">		ARMBR-cleaned EEG data from the training set. It helps visually assess</span>
+<span class="sd">		the effectiveness of the blink suppression.</span>
+
+<span class="sd">		Parameters</span>
+<span class="sd">		----------</span>
+<span class="sd">		show : bool</span>
+<span class="sd">			Whether to display the figure immediately (default: True).</span>
+<span class="sd">		verbose : bool | str | int | None</span>
+<span class="sd">			Control verbosity of the logging output.</span>
+<span class="sd">			</span>
+<span class="sd">		Returns</span>
+<span class="sd">		-------</span>
+<span class="sd">		self : instance of ARMBR</span>
+<span class="sd">			Returns the current instance for chaining.</span>
+<span class="sd">		fig : matplotlib.figure.Figure</span>
+<span class="sd">			Matplotlib figure containing the before/after subplots.</span>
+
+<span class="sd">		Raises</span>
+<span class="sd">		------</span>
+<span class="sd">		RuntimeError</span>
+<span class="sd">			If `.fit()` has not been called before this method.</span>
+
+<span class="sd">		Notes</span>
+<span class="sd">		-----</span>
+<span class="sd">		Red traces indicate raw EEG. Black traces show cleaned data.</span>
+<span class="sd">		Each channel is vertically offset for readability.</span>
+<span class="sd">		This plot only shows data used during training (`fit()`).</span>
+<span class="sd">		&quot;&quot;&quot;</span>
+
+		<span class="k">if</span> <span class="ow">not</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;is_fitted&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+			<span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;You must call .fit() before .plot().&quot;</span><span class="p">)</span>
+		
+		<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+		
+		<span class="c1"># Prepare data</span>
+		<span class="n">raw_eeg</span> <span class="o">=</span> <span class="n">_rotate_arr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_eeg_data</span><span class="p">)</span>
+		<span class="n">cleaned</span> <span class="o">=</span> <span class="n">_rotate_arr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cleaned_eeg</span><span class="p">)</span>
+
+		<span class="n">n_channels</span> <span class="o">=</span> <span class="n">raw_eeg</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+
+		<span class="n">offset</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">raw_eeg</span><span class="p">))</span> <span class="o">*</span> <span class="mi">10</span>
+
+		<span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">6</span><span class="p">),</span> <span class="n">sharey</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+		<span class="c1"># Plot original EEG</span>
+		<span class="n">time_samples</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">raw_eeg</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]))</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">sfreq</span>
+		
+		<span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_channels</span><span class="p">):</span>
+			<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">time_samples</span><span class="p">,</span> <span class="n">raw_eeg</span><span class="p">[:,</span> <span class="n">idx</span><span class="p">]</span> <span class="o">-</span> <span class="n">offset</span> <span class="o">*</span> <span class="n">idx</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s1">&#39;r&#39;</span><span class="p">)</span>
+		<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Before ARMBR&quot;</span><span class="p">)</span>
+		<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">&quot;Time (samples)&quot;</span><span class="p">)</span>
+		<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_yticks</span><span class="p">([])</span>
+		<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlim</span><span class="p">([</span><span class="n">time_samples</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">time_samples</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]])</span>
+		
+		<span class="c1"># Plot cleaned EEG</span>
+		<span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_channels</span><span class="p">):</span>
+			<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">time_samples</span><span class="p">,</span> <span class="n">cleaned</span><span class="p">[:,</span> <span class="n">idx</span><span class="p">]</span> <span class="o">-</span> <span class="n">offset</span> <span class="o">*</span> <span class="n">idx</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s1">&#39;k&#39;</span><span class="p">)</span>
+		<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;After ARMBR&quot;</span><span class="p">)</span>
+		<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">&quot;Time (samples)&quot;</span><span class="p">)</span>
+		<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_yticks</span><span class="p">([])</span>
+		<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlim</span><span class="p">([</span><span class="n">time_samples</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">time_samples</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]])</span>
+
+		<span class="n">fig</span><span class="o">.</span><span class="n">suptitle</span><span class="p">(</span><span class="s2">&quot;ARMBR Cleaning Results&quot;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">14</span><span class="p">)</span>
+
+		<span class="k">if</span> <span class="n">show</span><span class="p">:</span>
+			<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+			<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+		
+		<span class="n">LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Plotted before/after ARMBR EEG.&quot;</span><span class="p">)</span>
+		<span class="k">return</span> <span class="bp">self</span><span class="p">,</span> <span class="n">fig</span></div>
+
+		
+	
+
+<div class="viewcode-block" id="ARMBR.plot_blink_patterns">
+<a class="viewcode-back" href="../../armbr.html#armbr.ARMBR.plot_blink_patterns">[docs]</a>
+	<span class="k">def</span> <span class="nf">plot_blink_patterns</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">show</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">		</span>
+<span class="w">		</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">		Visualize the spatial blink components estimated by ARMBR.</span>
+
+<span class="sd">		This method generates topographic plots of each component in the</span>
+<span class="sd">		blink spatial pattern matrix, which represent how blinks manifest</span>
+<span class="sd">		across the EEG scalp sensors.</span>
+
+<span class="sd">		Parameters</span>
+<span class="sd">		----------</span>
+<span class="sd">		show : bool</span>
+<span class="sd">			If True, the plot is displayed immediately. Default is True.</span>
+
+<span class="sd">		Returns</span>
+<span class="sd">		-------</span>
+<span class="sd">		self : instance of ARMBR</span>
+<span class="sd">			Returns the current instance for chaining.</span>
+<span class="sd">		plt : module</span>
+<span class="sd">			The matplotlib.pyplot module with the figure and axes created.</span>
+
+<span class="sd">		Notes</span>
+<span class="sd">		-----</span>
+<span class="sd">		This function uses `mne.viz.plot_topomap` to display scalp maps for</span>
+<span class="sd">		each spatial component. The colormap is centered at zero and scaled</span>
+<span class="sd">		symmetrically based on the maximum absolute pattern value.</span>
+<span class="sd">		&quot;&quot;&quot;</span>
+
+		<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+		<span class="kn">from</span> <span class="nn">mpl_toolkits.axes_grid1</span> <span class="kn">import</span> <span class="n">make_axes_locatable</span>
+
+
+		<span class="n">n_components</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">blink_spatial_pattern</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+		<span class="n">abs_max</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">blink_spatial_pattern</span><span class="p">))</span>
+		<span class="n">order</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span><span class="n">abs_max</span><span class="p">)))</span> <span class="k">if</span> <span class="n">abs_max</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">0</span>
+		<span class="n">precision</span> <span class="o">=</span> <span class="mi">10</span> <span class="o">**</span> <span class="o">-</span><span class="p">(</span><span class="n">order</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>   
+
+		<span class="n">clim_val</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">abs_max</span> <span class="o">*</span> <span class="n">precision</span><span class="p">)</span> <span class="o">/</span> <span class="n">precision</span>  <span class="c1"># symmetric rounded clim</span>
+		<span class="n">vlim</span> <span class="o">=</span> <span class="p">(</span><span class="o">-</span><span class="n">clim_val</span><span class="p">,</span> <span class="n">clim_val</span><span class="p">)</span>
+
+		<span class="n">n_cols</span> <span class="o">=</span> <span class="mi">1</span>
+		<span class="n">n_rows</span> <span class="o">=</span> <span class="n">n_components</span>
+
+		<span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">n_rows</span><span class="p">,</span> <span class="n">n_cols</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mf">2.5</span> <span class="o">*</span> <span class="n">n_rows</span><span class="p">))</span>
+		<span class="k">if</span> <span class="n">n_components</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+			<span class="n">axes</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">axes</span><span class="p">])</span>
+		<span class="n">axes</span> <span class="o">=</span> <span class="n">axes</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+
+		<span class="c1"># Create placeholder for colorbar axis</span>
+		<span class="n">divider</span> <span class="o">=</span> <span class="n">make_axes_locatable</span><span class="p">(</span><span class="n">axes</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+		<span class="n">cbar_ax</span> <span class="o">=</span> <span class="n">divider</span><span class="o">.</span><span class="n">append_axes</span><span class="p">(</span><span class="s2">&quot;right&quot;</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="s2">&quot;5%&quot;</span><span class="p">,</span> <span class="n">pad</span><span class="o">=</span><span class="mf">0.05</span><span class="p">)</span>
+
+		<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_components</span><span class="p">):</span>
+			<span class="n">pattern</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">blink_spatial_pattern</span><span class="p">[:,</span> <span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">squeeze</span><span class="p">()</span>
+
+			<span class="n">im</span><span class="p">,</span> <span class="n">cm</span> <span class="o">=</span> <span class="n">mne</span><span class="o">.</span><span class="n">viz</span><span class="o">.</span><span class="n">plot_topomap</span><span class="p">(</span>
+				<span class="n">pattern</span><span class="p">,</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">_raw_info</span><span class="p">,</span>
+				<span class="n">ch_type</span><span class="o">=</span><span class="s1">&#39;eeg&#39;</span><span class="p">,</span>
+				<span class="n">sensors</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+				<span class="n">contours</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+				<span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;RdBu_r&#39;</span><span class="p">,</span>
+				<span class="n">axes</span><span class="o">=</span><span class="n">axes</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
+				<span class="n">show</span><span class="o">=</span><span class="n">show</span><span class="p">,</span>
+				<span class="n">vlim</span><span class="o">=</span><span class="n">vlim</span>
+			<span class="p">)</span>
+			<span class="n">axes</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">&#39;Component </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+
+
+		<span class="c1"># Shared colorbar</span>
+		<span class="n">clim</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">kind</span><span class="o">=</span><span class="s1">&#39;value&#39;</span><span class="p">,</span> <span class="n">lims</span><span class="o">=</span><span class="p">[</span><span class="o">-</span><span class="n">clim_val</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">clim_val</span><span class="p">])</span>
+		<span class="n">cbar</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">colorbar</span><span class="p">(</span><span class="n">im</span><span class="p">,</span> <span class="n">cax</span><span class="o">=</span><span class="n">cbar_ax</span><span class="p">,</span> <span class="n">orientation</span><span class="o">=</span><span class="s1">&#39;vertical&#39;</span><span class="p">)</span>
+		<span class="n">cbar</span><span class="o">.</span><span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">&quot;Pattern value&quot;</span><span class="p">,</span> <span class="n">rotation</span><span class="o">=</span><span class="mi">270</span><span class="p">,</span> <span class="n">labelpad</span><span class="o">=</span><span class="mi">15</span><span class="p">)</span>
+
+		<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+		<span class="k">if</span> <span class="n">show</span><span class="p">:</span>
+			<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+		<span class="k">return</span> <span class="bp">self</span><span class="p">,</span> <span class="n">plt</span></div>
+
+
+
+
+
+
+
+	
+<div class="viewcode-block" id="ARMBR.copy">
+<a class="viewcode-back" href="../../armbr.html#armbr.ARMBR.copy">[docs]</a>
+	<span class="k">def</span> <span class="nf">copy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">		</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">		Create a deep copy of the ARMBR instance.</span>
+<span class="sd">		</span>
+<span class="sd">		This is useful for preserving the current model state before applying</span>
+<span class="sd">		changes such as refitting or reapplying to different data.</span>
+
+<span class="sd">		Returns</span>
+<span class="sd">		-------</span>
+<span class="sd">		inst : instance of ARMBR</span>
+<span class="sd">			A deep copy of the current object, including all internal state.</span>
+
+<span class="sd">		Notes</span>
+<span class="sd">		-----</span>
+<span class="sd">		The copied instance is independent of the original and can be modified</span>
+<span class="sd">		or reapplied without affecting the original.</span>
+<span class="sd">		&quot;&quot;&quot;</span>
+		<span class="n">inst</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+		<span class="n">LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;ARMBR object copied.&quot;</span><span class="p">)</span>
+		<span class="k">return</span> <span class="n">inst</span></div>
+
+			
+
+
+
+
+	<span class="k">def</span> <span class="nf">_prep_blink_channels</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">blink_chs</span><span class="p">):</span>
+<span class="w">		</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">		Standardize user-specified blink channels to internal index format.</span>
+
+<span class="sd">		This method resolves the `blink_chs` argument passed to ARMBR into</span>
+<span class="sd">		canonical numeric indices based on `self.ch_names`. Accepts either</span>
+<span class="sd">		a list of integers (indices) or a list of strings (channel names).</span>
+
+<span class="sd">		Parameters</span>
+<span class="sd">		----------</span>
+<span class="sd">		blink_chs : list of str | list of int</span>
+<span class="sd">			Blink-affected EEG channels. Can be specified by name or index.</span>
+
+<span class="sd">		Raises</span>
+<span class="sd">		------</span>
+<span class="sd">		ValueError</span>
+<span class="sd">			If the input is a mix of names and indices, or contains invalid types.</span>
+
+<span class="sd">		Notes</span>
+<span class="sd">		-----</span>
+<span class="sd">		This method sets `self.ch_name` and `self.ch_name_inx` attributes</span>
+<span class="sd">		based on the resolved input.</span>
+<span class="sd">		&quot;&quot;&quot;</span>
+
+		<span class="n">is_all_int</span> <span class="o">=</span> <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">ch</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">ch</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="n">ch</span><span class="o">.</span><span class="n">isdigit</span><span class="p">())</span> <span class="k">for</span> <span class="n">ch</span> <span class="ow">in</span> <span class="n">blink_chs</span><span class="p">)</span>
+		<span class="n">is_all_str</span> <span class="o">=</span> <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">ch</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">for</span> <span class="n">ch</span> <span class="ow">in</span> <span class="n">blink_chs</span><span class="p">)</span>
+
+		<span class="k">if</span> <span class="n">is_all_int</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">ch_name_inx</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">ch</span><span class="p">)</span> <span class="k">for</span> <span class="n">ch</span> <span class="ow">in</span> <span class="n">blink_chs</span><span class="p">]</span>
+			<span class="n">LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Blink channels (indices): </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ch_name_inx</span><span class="p">))</span>
+
+		<span class="k">elif</span> <span class="n">is_all_str</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">ch_name</span> <span class="o">=</span> <span class="n">blink_chs</span>  <span class="c1"># Save user-specified names</span>
+			<span class="n">lower_all_ch_names</span> <span class="o">=</span> <span class="p">[</span><span class="n">name</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">ch_names</span><span class="p">]</span>
+
+			<span class="n">ch_indices</span> <span class="o">=</span> <span class="p">[]</span>
+			<span class="n">valid_names</span> <span class="o">=</span> <span class="p">[]</span>
+			<span class="k">for</span> <span class="n">ch</span> <span class="ow">in</span> <span class="n">blink_chs</span><span class="p">:</span>
+				<span class="n">ch_lower</span> <span class="o">=</span> <span class="n">ch</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+				<span class="k">if</span> <span class="n">ch_lower</span> <span class="ow">in</span> <span class="n">lower_all_ch_names</span><span class="p">:</span>
+					<span class="n">idx</span> <span class="o">=</span> <span class="n">lower_all_ch_names</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">ch_lower</span><span class="p">)</span>
+					<span class="n">ch_indices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span>
+					<span class="n">valid_names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ch_names</span><span class="p">[</span><span class="n">idx</span><span class="p">])</span>
+
+			<span class="bp">self</span><span class="o">.</span><span class="n">ch_name</span> <span class="o">=</span> <span class="n">valid_names</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">ch_name_inx</span> <span class="o">=</span> <span class="n">ch_indices</span>
+			<span class="n">LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Blink channels (names): </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ch_name</span><span class="p">))</span>
+
+		<span class="k">else</span><span class="p">:</span>
+			<span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Blink channel list must contain only channel names or only indices.&quot;</span><span class="p">)</span>
+
+
+
+
+
+	<span class="k">def</span> <span class="nf">_run_armbr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">blink_chs</span><span class="p">):</span>
+<span class="w">		</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">		Internal method to execute the ARMBR algorithm on training data.</span>
+
+<span class="sd">		This function estimates blink components by performing multivariate</span>
+<span class="sd">		backward regression using a simplified binary reference signal constructed</span>
+<span class="sd">		from the specified blink channels. The result includes a projection matrix</span>
+<span class="sd">		that can be used to suppress blink artifacts in new data.</span>
+
+<span class="sd">		Parameters</span>
+<span class="sd">		----------</span>
+<span class="sd">		blink_chs : list of str | list of int</span>
+<span class="sd">			Names or indices of channels used to construct the blink reference.</span>
+
+<span class="sd">		Returns</span>
+<span class="sd">		-------</span>
+<span class="sd">		self : instance of ARMBR</span>
+<span class="sd">			Returns the instance with fitted model attributes stored.</span>
+
+<span class="sd">		Raises</span>
+<span class="sd">		------</span>
+<span class="sd">		RuntimeError</span>
+<span class="sd">			If no valid blink channels could be resolved.</span>
+
+<span class="sd">		Notes</span>
+<span class="sd">		-----</span>
+<span class="sd">		Stores internal variables including:</span>
+<span class="sd">		- `cleaned_eeg`: blink-suppressed training data</span>
+<span class="sd">		- `best_alpha`: threshold used (if auto)</span>
+<span class="sd">		- `blink_mask`: binary vector marking blink segments</span>
+<span class="sd">		- `blink_comp`: blink time course (latent variable)</span>
+<span class="sd">		- `blink_spatial_pattern`: scalp patterns</span>
+<span class="sd">		- `blink_projection_matrix`: projection operator for cleaning</span>
+<span class="sd">		&quot;&quot;&quot;</span>
+
+		<span class="c1"># Resolve channel names or indices</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">_prep_blink_channels</span><span class="p">(</span><span class="n">blink_chs</span><span class="p">)</span>
+		
+		<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">alpha</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s1">&#39;auto&#39;</span><span class="p">:</span>
+			<span class="n">alpha</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="n">alpha</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">alpha</span><span class="p">)</span>
+
+		<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ch_name_inx</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+			<span class="c1"># Apply ARMBR</span>
+			<span class="n">x_purged</span><span class="p">,</span> <span class="n">best_alpha</span><span class="p">,</span> <span class="n">blink_mask</span><span class="p">,</span> <span class="n">blink_comp</span><span class="p">,</span> <span class="n">blink_spatial_pattern</span><span class="p">,</span> <span class="n">blink_projection_matrix</span> <span class="o">=</span> <span class="n">run_armbr</span><span class="p">(</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">_eeg_data</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ch_name_inx</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">sfreq</span><span class="p">,</span> <span class="n">alpha</span>
+			<span class="p">)</span>
+
+			<span class="c1"># Store outputs</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">cleaned_eeg</span> <span class="o">=</span> <span class="n">_rotate_arr</span><span class="p">(</span><span class="n">x_purged</span><span class="p">)</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">best_alpha</span> <span class="o">=</span> <span class="n">best_alpha</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">blink_mask</span> <span class="o">=</span> <span class="n">blink_mask</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">blink_comp</span> <span class="o">=</span> <span class="n">blink_comp</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">blink_spatial_pattern</span> <span class="o">=</span> <span class="n">blink_spatial_pattern</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">blink_projection_matrix</span> <span class="o">=</span> <span class="n">blink_projection_matrix</span>
+
+		<span class="k">else</span><span class="p">:</span>
+			<span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;No blink channels were identified. ARMBR was not performed.&quot;</span><span class="p">)</span>
+			
+		<span class="k">return</span> <span class="bp">self</span></div>
+
+	
+
+
+
+<div class="viewcode-block" id="run_armbr">
+<a class="viewcode-back" href="../../armbr.html#armbr.run_armbr">[docs]</a>
+<span class="k">def</span> <span class="nf">run_armbr</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">blink_ch_idx</span><span class="p">,</span> <span class="n">sfreq</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=-</span><span class="mf">1.0</span><span class="p">):</span>
+<span class="w">	</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">	Run ARMBR blink artifact removal on multichannel EEG data.</span>
+
+<span class="sd">	This function implements the full ARMBR algorithm pipeline on continuous EEG</span>
+<span class="sd">	data. It identifies blink artifacts from frontal EEG channels, extracts a</span>
+<span class="sd">	low-rank blink component, estimates its spatial distribution, and subtracts</span>
+<span class="sd">	it from the signal using multivariate backward regression.</span>
+
+<span class="sd">	Parameters</span>
+<span class="sd">	----------</span>
+<span class="sd">	X : ndarray, shape (n_samples, n_channels)</span>
+<span class="sd">		Input EEG data. Each row is a time sample; each column is a channel.</span>
+<span class="sd">	blink_ch_idx : list of int</span>
+<span class="sd">		Indices of channels strongly affected by blinks (e.g. Fp1, Fp2).</span>
+<span class="sd">	sfreq : float</span>
+<span class="sd">		Sampling frequency in Hz.</span>
+<span class="sd">	alpha : float</span>
+<span class="sd">		Threshold multiplier for blink detection. If set to -1, the algorithm</span>
+<span class="sd">		performs automatic optimization based on the energy ratio of low- to</span>
+<span class="sd">		high-frequency components.</span>
+
+<span class="sd">	Returns</span>
+<span class="sd">	-------</span>
+<span class="sd">	x_clean : ndarray, shape (n_samples, n_channels)</span>
+<span class="sd">		EEG data with blink artifacts removed.</span>
+<span class="sd">	best_alpha : float or None</span>
+<span class="sd">		The optimal alpha value used. If alpha was set manually, this matches</span>
+<span class="sd">		the input; if optimized, it is the best value found.</span>
+<span class="sd">	ref_mask : ndarray, shape (n_samples,)</span>
+<span class="sd">		Binary mask marking detected blink events.</span>
+<span class="sd">	blink_comp : ndarray, shape (n_samples,)</span>
+<span class="sd">		Time course of the extracted blink component.</span>
+<span class="sd">	blink_pattern : ndarray, shape (n_channels,)</span>
+<span class="sd">		Estimated spatial topography of the blink.</span>
+<span class="sd">	blink_projection_matrix : ndarray, shape (n_channels, n_channels)</span>
+<span class="sd">		Spatial projection matrix used to remove blink activity.</span>
+
+<span class="sd">	Notes</span>
+<span class="sd">	-----</span>
+<span class="sd">	When `alpha=-1`, the algorithm sweeps a range of values to maximize the</span>
+<span class="sd">	low-frequency to high-frequency energy ratio of the blink component, as</span>
+<span class="sd">	described in Alkhoury et al. (2025). The returned `blink_projection_matrix`</span>
+<span class="sd">	can be applied to other EEG data for online or batch blink suppression.</span>
+<span class="sd">	&quot;&quot;&quot;</span>
+
+	<span class="kn">import</span> <span class="nn">mne.utils</span><span class="o">,</span> <span class="nn">mne.filter</span>
+	
+	<span class="n">X</span> <span class="o">=</span> <span class="n">_rotate_arr</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+	<span class="n">good_eeg</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">good_blinks</span> <span class="o">=</span> <span class="n">_data_prep</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">sfreq</span><span class="p">,</span> <span class="n">blink_ch_idx</span><span class="p">)</span>
+
+	<span class="k">if</span> <span class="n">alpha</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+		<span class="n">alpha_range</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mf">0.01</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">)</span>
+		<span class="n">energy_ratios</span> <span class="o">=</span> <span class="p">[]</span>
+
+		<span class="k">with</span> <span class="n">mne</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">ProgressBar</span><span class="p">(</span><span class="n">alpha_range</span><span class="p">,</span> <span class="n">mesg</span><span class="o">=</span><span class="s1">&#39;Running ARMBR&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">pb</span><span class="p">:</span>
+			<span class="k">for</span> <span class="n">test_alpha</span> <span class="ow">in</span> <span class="n">pb</span><span class="p">:</span>
+				<span class="n">x_tmp</span><span class="p">,</span> <span class="n">blink_tmp</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">_blink_selection</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">good_eeg</span><span class="p">,</span> <span class="n">good_blinks</span><span class="p">,</span> <span class="n">test_alpha</span><span class="p">)</span>
+
+				<span class="k">if</span> <span class="n">blink_tmp</span><span class="o">.</span><span class="n">size</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">blink_tmp</span><span class="p">)):</span>
+
+					<span class="n">blink_filt</span> <span class="o">=</span> <span class="n">mne</span><span class="o">.</span><span class="n">filter</span><span class="o">.</span><span class="n">filter_data</span><span class="p">(</span><span class="n">blink_tmp</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="n">sfreq</span><span class="o">=</span><span class="n">sfreq</span><span class="p">,</span> <span class="n">l_freq</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">h_freq</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">&#39;iir&#39;</span><span class="p">,</span> <span class="n">iir_params</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">order</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">ftype</span><span class="o">=</span><span class="s1">&#39;butter&#39;</span><span class="p">),</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">T</span>				
+					<span class="c1">#import scipy.signal</span>
+					<span class="c1">#bpf = scipy.signal.firwin(10, [1, 8], pass_zero=False, fs=sfreq)</span>
+					<span class="c1">#blink_filt = scipy.signal.filtfilt(bpf, 1, blink_tmp.T).T</span>
+					
+					<span class="n">ratio</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">blink_filt</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">((</span><span class="n">blink_tmp</span> <span class="o">-</span> <span class="n">blink_filt</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+					<span class="n">energy_ratios</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ratio</span><span class="p">)</span>
+				<span class="k">else</span><span class="p">:</span>
+					<span class="k">break</span>
+
+		<span class="n">energy_ratios</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">energy_ratios</span><span class="p">)</span>
+		<span class="n">alpha_range</span> <span class="o">=</span> <span class="n">alpha_range</span><span class="p">[:</span><span class="nb">len</span><span class="p">(</span><span class="n">energy_ratios</span><span class="p">)]</span>
+
+		<span class="k">if</span> <span class="n">energy_ratios</span><span class="o">.</span><span class="n">size</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+			<span class="n">best_alpha</span> <span class="o">=</span> <span class="n">alpha_range</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">energy_ratios</span><span class="p">)]</span>
+			<span class="n">x_clean</span><span class="p">,</span> <span class="n">blink_comp</span><span class="p">,</span> <span class="n">ref_mask</span><span class="p">,</span> <span class="n">blink_pattern</span><span class="p">,</span> <span class="n">blink_projection_matrix</span> <span class="o">=</span> <span class="n">_blink_selection</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">good_eeg</span><span class="p">,</span> <span class="n">good_blinks</span><span class="p">,</span> <span class="n">best_alpha</span><span class="p">)</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="n">x_clean</span> <span class="o">=</span> <span class="n">X</span>
+			<span class="n">blink_comp</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([])</span>
+			<span class="n">ref_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([])</span>
+			<span class="n">blink_pattern</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([])</span>
+			<span class="n">best_alpha</span> <span class="o">=</span> <span class="kc">None</span>
+
+	<span class="k">else</span><span class="p">:</span>
+		<span class="n">x_clean</span><span class="p">,</span> <span class="n">blink_comp</span><span class="p">,</span> <span class="n">ref_mask</span><span class="p">,</span> <span class="n">blink_pattern</span><span class="p">,</span> <span class="n">blink_projection_matrix</span> <span class="o">=</span> <span class="n">_blink_selection</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">good_eeg</span><span class="p">,</span> <span class="n">good_blinks</span><span class="p">,</span> <span class="n">alpha</span><span class="p">)</span>
+		<span class="n">best_alpha</span> <span class="o">=</span> <span class="n">alpha</span>
+
+	<span class="k">return</span> <span class="n">x_clean</span><span class="p">,</span> <span class="n">best_alpha</span><span class="p">,</span> <span class="n">ref_mask</span><span class="p">,</span> <span class="n">blink_comp</span><span class="p">,</span> <span class="n">blink_pattern</span><span class="p">,</span> <span class="n">blink_projection_matrix</span></div>
+
+
+	
+<span class="c1"># ============================================================</span>
+<span class="c1"># Internal utility functions (not intended for end-user access)</span>
+<span class="c1"># ============================================================</span>
+
+<span class="k">def</span> <span class="nf">_rotate_arr</span><span class="p">(</span><span class="n">X</span><span class="p">):</span>
+<span class="w">	</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">	Ensure EEG array is in (n_samples, n_channels) shape.</span>
+
+<span class="sd">	This helper function standardizes the orientation of EEG data,</span>
+<span class="sd">	so that time samples are along the first axis and channels along</span>
+<span class="sd">	the second. It handles 1D arrays, transposes if necessary, and</span>
+<span class="sd">	returns the adjusted array.</span>
+
+<span class="sd">	Parameters</span>
+<span class="sd">	----------</span>
+<span class="sd">	X : ndarray</span>
+<span class="sd">		Input EEG data. Can be 1D, (n_channels, n_samples), or (n_samples, n_channels).</span>
+
+<span class="sd">	Returns</span>
+<span class="sd">	-------</span>
+<span class="sd">	X_out : ndarray</span>
+<span class="sd">		Output array in shape (n_samples, n_channels).</span>
+
+<span class="sd">	Notes</span>
+<span class="sd">	-----</span>
+<span class="sd">	This is useful when loading or manipulating EEG matrices, since</span>
+<span class="sd">	EEG libraries often vary in dimension conventions.</span>
+<span class="sd">	&quot;&quot;&quot;</span>
+
+	<span class="n">X</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+
+	<span class="k">if</span> <span class="n">X</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+		<span class="n">X</span> <span class="o">=</span> <span class="n">X</span><span class="p">[:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]</span>  <span class="c1"># Convert to column vector</span>
+
+	<span class="k">if</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span>
+		<span class="k">return</span> <span class="n">X</span><span class="o">.</span><span class="n">T</span>  <span class="c1"># Transpose to make samples on rows</span>
+	<span class="k">return</span> <span class="n">X</span>
+
+
+<span class="k">def</span> <span class="nf">_max_amp</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">sfreq</span><span class="p">,</span> <span class="n">window_size</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">shift_size</span><span class="o">=</span><span class="mi">15</span><span class="p">):</span>
+<span class="w">	</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">	Compute maximum absolute amplitude over sliding windows.</span>
+
+<span class="sd">	Parameters</span>
+<span class="sd">	----------</span>
+<span class="sd">	data : array-like, shape (n_samples,)</span>
+<span class="sd">		1D time-series data.</span>
+<span class="sd">	sfreq : float</span>
+<span class="sd">		Sampling frequency in Hz.</span>
+<span class="sd">	window_size : float</span>
+<span class="sd">		Length of each window in seconds. Default is 15.</span>
+<span class="sd">	shift_size : float</span>
+<span class="sd">		Step size between windows in seconds. Default is 15.</span>
+
+<span class="sd">	Returns</span>
+<span class="sd">	-------</span>
+<span class="sd">	max_values : list of float</span>
+<span class="sd">		Maximum absolute amplitudes for each window.</span>
+
+<span class="sd">	Notes</span>
+<span class="sd">	-----</span>
+<span class="sd">	This function is used to assess blink signal amplitude variability</span>
+<span class="sd">	for segment selection in ARMBR training.</span>
+<span class="sd">	&quot;&quot;&quot;</span>
+	
+	<span class="n">window_pts</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">window_size</span> <span class="o">*</span> <span class="n">sfreq</span><span class="p">)</span>
+	<span class="n">shift_pts</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">shift_size</span> <span class="o">*</span> <span class="n">sfreq</span><span class="p">)</span>
+
+	<span class="n">max_values</span> <span class="o">=</span> <span class="p">[]</span>
+	<span class="k">for</span> <span class="n">start</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">),</span> <span class="n">shift_pts</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+		<span class="n">stop</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">start</span> <span class="o">+</span> <span class="n">window_pts</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">))</span>
+		<span class="n">window</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">start</span><span class="p">:</span><span class="n">stop</span><span class="p">]</span>
+		<span class="n">max_values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">window</span><span class="p">)))</span>
+
+	<span class="k">return</span> <span class="n">max_values</span>
+
+
+	
+<span class="k">def</span> <span class="nf">_segment</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">sfreq</span><span class="p">,</span> <span class="n">window_size</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">shift_size</span><span class="o">=</span><span class="mi">15</span><span class="p">):</span>
+<span class="w">	</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">	Segment time-series data into overlapping windows.</span>
+
+<span class="sd">	Parameters</span>
+<span class="sd">	----------</span>
+<span class="sd">	data : array-like, shape (n_samples,) or (n_samples, ...)</span>
+<span class="sd">		Time-series data to segment.</span>
+<span class="sd">	sfreq : float</span>
+<span class="sd">		Sampling frequency in Hz.</span>
+<span class="sd">	window_size : float</span>
+<span class="sd">		Length of each segment in seconds. Default is 15.</span>
+<span class="sd">	shift_size : float</span>
+<span class="sd">		Step size between segments in seconds. Default is 15.</span>
+
+<span class="sd">	Returns</span>
+<span class="sd">	-------</span>
+<span class="sd">	segments : list of ndarray</span>
+<span class="sd">		List of windows (each of shape (window_pts, ...)) extracted from input data.</span>
+<span class="sd">	&quot;&quot;&quot;</span>
+	<span class="n">window_pts</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">window_size</span> <span class="o">*</span> <span class="n">sfreq</span><span class="p">)</span>
+	<span class="n">shift_pts</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">shift_size</span> <span class="o">*</span> <span class="n">sfreq</span><span class="p">)</span>
+
+	<span class="n">segments</span> <span class="o">=</span> <span class="p">[]</span>
+	<span class="k">for</span> <span class="n">start</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">),</span> <span class="n">shift_pts</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+		<span class="n">stop</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">start</span> <span class="o">+</span> <span class="n">window_pts</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">))</span>
+		<span class="n">segments</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">start</span><span class="p">:</span><span class="n">stop</span><span class="p">])</span>
+
+	<span class="k">return</span> <span class="n">segments</span>
+
+	
+	
+<span class="k">def</span> <span class="nf">_data_select</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">init_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">std_threshold</span><span class="o">=</span><span class="mf">5.0</span><span class="p">):</span>
+<span class="w">	</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">	Filter outliers from a 1D signal based on standard deviation threshold.</span>
+
+<span class="sd">	Parameters</span>
+<span class="sd">	----------</span>
+<span class="sd">	data : array-like, shape (n_samples,)</span>
+<span class="sd">		Input data vector to filter.</span>
+<span class="sd">	init_size : int</span>
+<span class="sd">		Number of initial points used to estimate baseline statistics. Default is 3.</span>
+<span class="sd">	std_threshold : float</span>
+<span class="sd">		Standard deviation threshold for excluding outliers. Default is 5.0.</span>
+
+<span class="sd">	Returns</span>
+<span class="sd">	-------</span>
+<span class="sd">	filtered_data : list of float</span>
+<span class="sd">		Values retained after outlier removal.</span>
+<span class="sd">	filtered_indices : list of int</span>
+<span class="sd">		Indices of the retained values.</span>
+<span class="sd">	excluded_values : list of float</span>
+<span class="sd">		Values excluded as outliers.</span>
+<span class="sd">	excluded_indices : list of int</span>
+<span class="sd">		Indices of the excluded outliers.</span>
+<span class="sd">	&quot;&quot;&quot;</span>
+	<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+		<span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;The input data vector must not be empty.&quot;</span><span class="p">)</span>
+
+	<span class="n">data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+	<span class="n">filtered_data</span> <span class="o">=</span> <span class="p">[]</span>
+	<span class="n">filtered_indices</span> <span class="o">=</span> <span class="p">[]</span>
+	<span class="n">excluded_values</span> <span class="o">=</span> <span class="p">[]</span>
+	<span class="n">excluded_indices</span> <span class="o">=</span> <span class="p">[]</span>
+
+	<span class="c1"># Initialize with first few points</span>
+	<span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="n">init_size</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">))):</span>
+		<span class="n">filtered_data</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">j</span><span class="p">])</span>
+		<span class="n">filtered_indices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">j</span><span class="p">)</span>
+
+	<span class="c1"># Iterate through remaining points</span>
+	<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">init_size</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)):</span>
+		<span class="n">mean_prev</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">data</span><span class="p">[:</span><span class="n">i</span><span class="p">])</span>
+		<span class="n">std_prev</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">data</span><span class="p">[:</span><span class="n">i</span><span class="p">])</span>
+
+		<span class="k">if</span> <span class="nb">abs</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">mean_prev</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">std_threshold</span> <span class="o">*</span> <span class="n">std_prev</span><span class="p">:</span>
+			<span class="n">filtered_data</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+			<span class="n">filtered_indices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">mean_prev</span>  <span class="c1"># Replace in-place (if needed downstream)</span>
+			<span class="n">excluded_values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+			<span class="n">excluded_indices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+
+	<span class="k">return</span> <span class="n">filtered_data</span><span class="p">,</span> <span class="n">filtered_indices</span><span class="p">,</span> <span class="n">excluded_values</span><span class="p">,</span> <span class="n">excluded_indices</span>
+
+	
+	
+	
+<span class="k">def</span> <span class="nf">_data_prep</span><span class="p">(</span><span class="n">eeg</span><span class="p">,</span> <span class="n">sfreq</span><span class="p">,</span> <span class="n">blink_indices</span><span class="p">):</span>
+<span class="w">	</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">	Prepare EEG data by extracting segments with clean blink signals.</span>
+
+<span class="sd">	Parameters</span>
+<span class="sd">	----------</span>
+<span class="sd">	eeg : ndarray, shape (n_samples, n_channels) or (n_channels, n_samples)</span>
+<span class="sd">		Raw EEG data.</span>
+<span class="sd">	sfreq : float</span>
+<span class="sd">		Sampling frequency in Hz.</span>
+<span class="sd">	blink_indices : list of int</span>
+<span class="sd">		Indices of channels most affected by blinks.</span>
+
+<span class="sd">	Returns</span>
+<span class="sd">	-------</span>
+<span class="sd">	good_eeg : ndarray</span>
+<span class="sd">		Filtered EEG data segments with good blink content.</span>
+<span class="sd">	orig_eeg : ndarray</span>
+<span class="sd">		Original EEG data (possibly transposed).</span>
+<span class="sd">	good_blinks : ndarray</span>
+<span class="sd">		Blink reference signal (1D) from clean segments.</span>
+<span class="sd">	</span>
+<span class="sd">	Notes</span>
+<span class="sd">	-----</span>
+<span class="sd">	This function handles preprocessing for the blink training pipeline, including</span>
+<span class="sd">	signal polarity alignment, segmentation, and amplitude-based filtering.</span>
+<span class="sd">	&quot;&quot;&quot;</span>
+	<span class="c1"># Ensure EEG is (n_samples, n_channels)</span>
+	<span class="k">if</span> <span class="n">eeg</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">eeg</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span>
+		<span class="n">eeg</span> <span class="o">=</span> <span class="n">eeg</span><span class="o">.</span><span class="n">T</span>
+	<span class="n">orig_eeg</span> <span class="o">=</span> <span class="n">eeg</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+	<span class="c1"># Construct average blink reference</span>
+	<span class="n">blink_signal</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">eeg</span><span class="p">[:,</span> <span class="n">blink_indices</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+	<span class="c1"># Invert if median &gt; mean</span>
+	<span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="n">blink_signal</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">blink_signal</span><span class="p">):</span>
+		<span class="n">blink_signal</span> <span class="o">=</span> <span class="o">-</span><span class="n">blink_signal</span>
+
+	<span class="c1"># Get blink-related metrics and segments</span>
+	<span class="n">blink_amp</span> <span class="o">=</span> <span class="n">_max_amp</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">blink_signal</span><span class="p">),</span> <span class="n">sfreq</span><span class="p">)</span>
+	<span class="n">blink_epochs</span> <span class="o">=</span> <span class="n">_segment</span><span class="p">(</span><span class="n">blink_signal</span><span class="p">,</span> <span class="n">sfreq</span><span class="p">)</span>
+	<span class="n">eeg_epochs</span> <span class="o">=</span> <span class="n">_segment</span><span class="p">(</span><span class="n">eeg</span><span class="p">,</span> <span class="n">sfreq</span><span class="p">)</span>
+
+	<span class="c1"># Select segments with acceptable blink amplitude</span>
+	<span class="n">_</span><span class="p">,</span> <span class="n">good_indices</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">_data_select</span><span class="p">(</span><span class="n">blink_amp</span><span class="p">)</span>
+
+	<span class="n">good_blinks</span> <span class="o">=</span> <span class="p">[]</span>
+	<span class="n">good_eeg</span> <span class="o">=</span> <span class="p">[]</span>
+
+	<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">good_indices</span><span class="p">:</span>
+		<span class="n">good_blinks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">blink_epochs</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+		<span class="n">good_eeg</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">eeg_epochs</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+
+	<span class="n">good_blinks</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">good_blinks</span><span class="p">)</span>
+	<span class="n">good_eeg</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">good_eeg</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+	<span class="k">return</span> <span class="n">good_eeg</span><span class="p">,</span> <span class="n">orig_eeg</span><span class="p">,</span> <span class="n">good_blinks</span>
+
+	
+
+<span class="k">def</span> <span class="nf">_projectout</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">X_reduced</span><span class="p">,</span> <span class="n">blink_mask</span><span class="p">,</span> <span class="n">mask_in</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">	</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">	Project out blink components from multichannel EEG data.</span>
+
+<span class="sd">	Parameters</span>
+<span class="sd">	----------</span>
+<span class="sd">	X : ndarray, shape (n_samples, n_channels)</span>
+<span class="sd">		Original EEG time-series.</span>
+<span class="sd">	X_reduced : ndarray, shape (n_samples, n_channels)</span>
+<span class="sd">		Subset of EEG data used for estimating covariance.</span>
+<span class="sd">	blink_mask : ndarray, shape (n_samples, n_refs)</span>
+<span class="sd">		Binary mask identifying blink occurrences.</span>
+<span class="sd">	mask_in : ndarray of bool | list of int | None</span>
+<span class="sd">		Mask indicating which channels to use in the projection.</span>
+<span class="sd">		If None, all channels are included.</span>
+
+<span class="sd">	Returns</span>
+<span class="sd">	-------</span>
+<span class="sd">	M_purge : ndarray, shape (n_channels, n_channels)</span>
+<span class="sd">		Projection matrix to suppress blink components.</span>
+<span class="sd">	w : ndarray, shape (n_channels, n_refs)</span>
+<span class="sd">		Projection weights (spatial filters).</span>
+<span class="sd">	a : ndarray, shape (n_channels, n_refs)</span>
+<span class="sd">		Spatial patterns of blink artifacts.</span>
+<span class="sd">	sigma : ndarray, shape (n_channels, n_channels)</span>
+<span class="sd">		Covariance matrix used in projection.</span>
+<span class="sd">	blink_comp : ndarray, shape (n_samples, n_refs)</span>
+<span class="sd">		Estimated blink components.</span>
+<span class="sd">	x_purged : ndarray, shape (n_samples, n_channels)</span>
+<span class="sd">		Blink-suppressed EEG.</span>
+
+<span class="sd">	Notes</span>
+<span class="sd">	-----</span>
+<span class="sd">	This is the core projection engine of ARMBR. It uses spatial filtering</span>
+<span class="sd">	to identify and remove blink topographies while preserving neural activity.</span>
+<span class="sd">	&quot;&quot;&quot;</span>
+
+	<span class="c1"># Ensure correct shapes</span>
+	<span class="n">X</span> <span class="o">=</span> <span class="n">_rotate_arr</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+	<span class="n">X_reduced</span> <span class="o">=</span> <span class="n">_rotate_arr</span><span class="p">(</span><span class="n">X_reduced</span><span class="p">)</span>
+	<span class="n">blink_mask</span> <span class="o">=</span> <span class="n">_rotate_arr</span><span class="p">(</span><span class="n">blink_mask</span><span class="p">)</span>
+	<span class="n">blink_mask</span> <span class="o">=</span> <span class="n">blink_mask</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>  <span class="c1"># &lt;- restored here</span>
+
+	<span class="n">n_samples</span><span class="p">,</span> <span class="n">n_channels</span> <span class="o">=</span> <span class="n">X_reduced</span><span class="o">.</span><span class="n">shape</span>
+	<span class="n">n_refs</span> <span class="o">=</span> <span class="n">blink_mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+
+	<span class="c1"># Handle mask_in logic</span>
+	<span class="k">if</span> <span class="n">mask_in</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+		<span class="n">mask_in</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">n_channels</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">bool</span><span class="p">)</span>
+	<span class="k">else</span><span class="p">:</span>
+		<span class="n">mask_in</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">mask_in</span><span class="p">)</span>
+		<span class="k">if</span> <span class="n">mask_in</span><span class="o">.</span><span class="n">dtype</span> <span class="o">!=</span> <span class="nb">bool</span><span class="p">:</span>
+			<span class="k">if</span> <span class="n">mask_in</span><span class="o">.</span><span class="n">min</span><span class="p">()</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="p">(</span><span class="n">mask_in</span><span class="o">.</span><span class="n">max</span><span class="p">()</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">or</span> <span class="n">mask_in</span><span class="o">.</span><span class="n">size</span> <span class="o">!=</span> <span class="n">n_channels</span><span class="p">):</span>
+				<span class="n">indices</span> <span class="o">=</span> <span class="n">mask_in</span>
+				<span class="n">mask_in</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">n_channels</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">bool</span><span class="p">)</span>
+				<span class="n">mask_in</span><span class="p">[</span><span class="n">indices</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+		<span class="n">mask_in</span> <span class="o">=</span> <span class="n">mask_in</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">bool</span><span class="p">)</span>
+
+	<span class="c1"># Input validation</span>
+	<span class="k">if</span> <span class="n">mask_in</span><span class="o">.</span><span class="n">size</span> <span class="o">!=</span> <span class="n">n_channels</span><span class="p">:</span>
+		<span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;mask_in size </span><span class="si">{}</span><span class="s2"> does not match number of channels </span><span class="si">{}</span><span class="s2">.&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">mask_in</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="n">n_channels</span><span class="p">))</span>
+	<span class="k">if</span> <span class="n">blink_mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="n">n_samples</span><span class="p">:</span>
+		<span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;blink_mask sample count </span><span class="si">{}</span><span class="s2"> does not match X sample count </span><span class="si">{}</span><span class="s2">.&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">blink_mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">n_samples</span><span class="p">))</span>
+
+	<span class="n">mask_out</span> <span class="o">=</span> <span class="o">~</span><span class="n">mask_in</span>
+	<span class="n">eye</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="n">n_channels</span><span class="p">)</span>
+	<span class="n">sigma</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cov</span><span class="p">(</span><span class="n">X_reduced</span><span class="p">,</span> <span class="n">rowvar</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+	<span class="c1"># Replace non-included rows and columns in covariance matrix</span>
+	<span class="n">sigma</span><span class="p">[:,</span> <span class="n">mask_out</span><span class="p">]</span> <span class="o">=</span> <span class="n">eye</span><span class="p">[:,</span> <span class="n">mask_out</span><span class="p">]</span>
+	<span class="n">sigma</span><span class="p">[</span><span class="n">mask_out</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">eye</span><span class="p">[</span><span class="n">mask_out</span><span class="p">,</span> <span class="p">:]</span>
+
+	<span class="c1"># Solve regression</span>
+	<span class="n">X_in</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">hstack</span><span class="p">([</span><span class="n">X_reduced</span><span class="p">[:,</span> <span class="n">mask_in</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="n">n_samples</span><span class="p">,</span> <span class="mi">1</span><span class="p">))])</span>
+	<span class="n">solution</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">lstsq</span><span class="p">(</span><span class="n">X_in</span><span class="p">,</span> <span class="n">blink_mask</span><span class="p">,</span> <span class="n">rcond</span><span class="o">=</span><span class="kc">None</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+	<span class="n">bias</span> <span class="o">=</span> <span class="n">solution</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+	<span class="n">w</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">n_channels</span><span class="p">,</span> <span class="n">n_refs</span><span class="p">))</span>
+	<span class="n">w</span><span class="p">[</span><span class="n">mask_in</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">solution</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+	<span class="c1"># Normalize</span>
+	<span class="n">rescale</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">((</span><span class="n">sigma</span> <span class="o">@</span> <span class="n">w</span><span class="p">)</span> <span class="o">*</span> <span class="n">w</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+	<span class="n">rescale</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">rescale</span> <span class="o">**</span> <span class="o">-</span><span class="mf">0.5</span><span class="p">)</span>
+	<span class="n">w</span> <span class="o">=</span> <span class="n">w</span> <span class="o">@</span> <span class="n">rescale</span>
+
+	<span class="n">a</span> <span class="o">=</span> <span class="n">sigma</span> <span class="o">@</span> <span class="n">w</span>
+	<span class="n">M_est</span> <span class="o">=</span> <span class="n">w</span> <span class="o">@</span> <span class="n">a</span><span class="o">.</span><span class="n">T</span>
+	<span class="n">M_purge</span> <span class="o">=</span> <span class="n">eye</span> <span class="o">-</span> <span class="n">M_est</span>
+	<span class="n">blink_comp</span> <span class="o">=</span> <span class="n">X</span> <span class="o">@</span> <span class="n">w</span>
+	<span class="n">x_purged</span> <span class="o">=</span> <span class="n">X</span> <span class="o">@</span> <span class="n">M_purge</span>
+
+	<span class="k">return</span> <span class="n">M_purge</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">sigma</span><span class="p">,</span> <span class="n">blink_comp</span><span class="p">,</span> <span class="n">x_purged</span>
+
+
+
+<span class="k">def</span> <span class="nf">_blink_selection</span><span class="p">(</span><span class="n">eeg_orig</span><span class="p">,</span> <span class="n">eeg_filt</span><span class="p">,</span> <span class="n">blink_filt</span><span class="p">,</span> <span class="n">alpha</span><span class="p">,</span> <span class="n">mask_in</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">	</span><span class="sd">&quot;&quot;&quot;Select and suppress blink artifacts from EEG data.</span>
+
+<span class="sd">	Parameters</span>
+<span class="sd">	----------</span>
+<span class="sd">	eeg_orig : ndarray, shape (n_samples, n_channels)</span>
+<span class="sd">		Original EEG data including all time points.</span>
+<span class="sd">	eeg_filt : ndarray, shape (n_samples, n_channels)</span>
+<span class="sd">		Subset of EEG data to use for blink suppression.</span>
+<span class="sd">	blink_filt : ndarray, shape (n_samples,)</span>
+<span class="sd">		Reference blink signal (e.g., averaged frontal signal).</span>
+<span class="sd">	alpha : float</span>
+<span class="sd">		Threshold scaling factor for blink detection.</span>
+<span class="sd">	mask_in : ndarray of bool | list of int | None</span>
+<span class="sd">		Boolean mask or list of channel indices to include. If None, all channels used.</span>
+
+<span class="sd">	Returns</span>
+<span class="sd">	-------</span>
+<span class="sd">	eeg_clean : ndarray</span>
+<span class="sd">		Blink-suppressed EEG.</span>
+<span class="sd">	blink_artifact : ndarray</span>
+<span class="sd">		Extracted blink artifact waveform.</span>
+<span class="sd">	ref_mask : ndarray</span>
+<span class="sd">		Binary mask marking blink time points.</span>
+<span class="sd">	blink_pattern : ndarray</span>
+<span class="sd">		Spatial blink topography.</span>
+<span class="sd">	blink_projection_matrix : ndarray</span>
+<span class="sd">		Projection matrix used to remove blink activity.</span>
+
+<span class="sd">	Notes</span>
+<span class="sd">	-----</span>
+<span class="sd">	Uses IQR-based thresholding on the blink signal to detect blink events,</span>
+<span class="sd">	then estimates and removes corresponding spatial blink components.</span>
+<span class="sd">	&quot;&quot;&quot;</span>
+
+	<span class="n">n_channels</span> <span class="o">=</span> <span class="n">eeg_orig</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+
+	<span class="k">if</span> <span class="n">mask_in</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+		<span class="n">mask_in</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">n_channels</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">int</span><span class="p">)</span>
+
+	<span class="c1"># Compute inter-quartile statistics</span>
+	<span class="n">Qa</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">quantile</span><span class="p">(</span><span class="n">blink_filt</span><span class="p">,</span> <span class="mf">0.159</span><span class="p">)</span>
+	<span class="n">Qb</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">quantile</span><span class="p">(</span><span class="n">blink_filt</span><span class="p">,</span> <span class="mf">0.841</span><span class="p">)</span>
+	<span class="n">Q2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">quantile</span><span class="p">(</span><span class="n">blink_filt</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">)</span>
+	<span class="n">std_iqr</span> <span class="o">=</span> <span class="p">(</span><span class="n">Qb</span> <span class="o">-</span> <span class="n">Qa</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span>
+	<span class="n">T0</span> <span class="o">=</span> <span class="n">Q2</span> <span class="o">+</span> <span class="n">alpha</span> <span class="o">*</span> <span class="n">std_iqr</span>
+
+	<span class="c1"># Build reference mask (binary vector of blink positions)</span>
+	<span class="n">reduced_eeg</span> <span class="o">=</span> <span class="n">eeg_filt</span><span class="p">[</span><span class="n">blink_filt</span> <span class="o">&gt;</span> <span class="n">Qa</span><span class="p">,</span> <span class="p">:]</span>
+	<span class="n">reduced_blink</span> <span class="o">=</span> <span class="n">blink_filt</span><span class="p">[</span><span class="n">blink_filt</span> <span class="o">&gt;</span> <span class="n">Qa</span><span class="p">]</span>
+	<span class="n">ref_mask</span> <span class="o">=</span> <span class="n">reduced_blink</span> <span class="o">&gt;</span> <span class="n">T0</span>
+
+	<span class="c1"># Project out blink if ref_mask contains any positive sample</span>
+	<span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">ref_mask</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+		<span class="n">blink_projection_matrix</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">blink_pattern</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">blink_artifact</span><span class="p">,</span> <span class="n">eeg_clean</span> <span class="o">=</span> <span class="n">_projectout</span><span class="p">(</span>
+			<span class="n">eeg_orig</span><span class="p">,</span> <span class="n">reduced_eeg</span><span class="p">,</span> <span class="n">ref_mask</span><span class="p">,</span> <span class="n">mask_in</span>
+		<span class="p">)</span>
+	<span class="k">else</span><span class="p">:</span>
+		<span class="n">eeg_clean</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([])</span>
+		<span class="n">blink_artifact</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([])</span>
+		<span class="n">blink_pattern</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([])</span>
+
+	<span class="k">return</span> <span class="n">eeg_clean</span><span class="p">,</span> <span class="n">blink_artifact</span><span class="p">,</span> <span class="n">ref_mask</span><span class="p">,</span> <span class="n">blink_pattern</span><span class="p">,</span> <span class="n">blink_projection_matrix</span>
+
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">ARMBR</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../usage.html">Usage Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../modules.html">Modules</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../armbr.html">ARMBR API</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project Info</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.2.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>
