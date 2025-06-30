@@ -248,7 +248,10 @@ class ARMBR:
 
 		n_components = self.blink_spatial_pattern.shape[1]
 		abs_max = np.max(np.abs(self.blink_spatial_pattern))
-		clim_val = np.ceil(abs_max * 1000000) / 1000000  # symmetric rounded clim
+		order = int(np.floor(np.log10(abs_max))) if abs_max > 0 else 0
+		precision = 10 ** -(order - 1)   
+
+		clim_val = np.ceil(abs_max * precision) / precision  # symmetric rounded clim
 		vlim = (-clim_val, clim_val)
 
 		n_cols = 1
