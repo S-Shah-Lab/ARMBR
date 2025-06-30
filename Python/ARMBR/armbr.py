@@ -1,29 +1,61 @@
-# Authors: Ludvik Alkhoury <Ludvik.alkhoury@gmail.com>
+# Authors:	Ludvik Alkhoury <Ludvik.alkhoury@gmail.com>
+#			N. Jeremy Hill <jezhill@gmail.com>
 # License: BSD-3-Clause
+"""
+TODO:  this is about removing blinks from EEG
 
-from math import nan
-import numpy as np
+from armbr import run_armbr   # core non-MNE-dependent code (just needs numpy)
+from armbr import ARMBR       # MNE-compatible wrapper class
+
+The ARMBR algorithm is described by
+	Alkhoury, ..... (2025) Journal of Neural Engineering, ...
+	
+	(see ARMBR.bibtex for the BibTeX entry)
+
+"""
 import copy
-import scipy
-from mne.io import BaseRaw
-from mne.utils import logger, verbose, _check_preload, ProgressBar
-from mne import pick_channels, pick_types
+
+import numpy as np
+
+try: import mne
+except:
+	VERBOSE = lambda x: x
+	class LOGGER:
+		def info(x): print(x)
+else:
+	import mne.utils; from mne.utils import verbose as VERBOSE, logger as LOGGER
+	import mne.filter
 
 __version__ = '2.0.0'  # @VERSION_INFO@
 
 
 class ARMBR:
+	"""
+	TODO: class documentation (an MNE-compatible wrapper class for
+	removing blinks and other electrooculographic artifacts from EEG
+	using the ARMBR algorithm (Alkhoury et al 2025 JNE,  see
+	ARMBR.bibtex for the BibTeX entry).
+	"""
+	
+	bibtex = """
+		@alkhoury2025_armbr {
+			TODO
+		}
+	"""
 	
 	def __init__(	self, 
-					ch_name	=	None,
-					alpha		=	-1.0):
-		
+					ch_name =	None,
+					alpha   =	'auto',
+					):
+		"""
+		TODO: explain what ch_name and alpha are and how they work
+		"""
 		self.ch_name	= ch_name or []
 		self.alpha 		= alpha
 		self.is_fitted	= False  
 		
 		
-	@verbose
+	@VERBOSE
 	def fit(	self, 
 				raw, 
 				picks	=	"eeg", 
@@ -40,19 +72,18 @@ class ARMBR:
 		picks : str | list | slice | None
 			Channels to include. Defaults to 'eeg'.
 		start : int | None
-			Sample index to start from (if manually specifying segment).
+			Sample time (in second) to start from (if manually specifying segment).
 		stop : int | None
-			Sample index to stop at (if manually specifying segment).
+			Sample time (in second) to stop at (if manually specifying segment).
 		verbose : bool | str | int | None
 			Control verbosity of the logging output.
-		"""		
-
+		"""
+		
+		
 		if start is not None and stop is not None:
 			# User provided manual segment (in samples)
-			data = raw.get_data(picks=picks, start=start, stop=stop)
-			t_start = start / raw.info['sfreq']
-			t_stop = (stop - 1) / raw.info['sfreq']
-			logger.info(f"Using manual segment from {t_start:.2f}s to {t_stop:.2f}s.")
+			data = raw.get_data(picks=picks, start=int(start*raw.info['sfreq']), stop=int(stop*raw.info['sfreq'])) 
+			LOGGER.info(f"Using manual segment from {start:.2f}s to {stop:.2f}s.")
 		else:
 			n_samples = raw.n_times
 			mask = np.ones(n_samples, dtype=bool)
@@ -61,34 +92,38 @@ class ARMBR:
 			for annot in raw.annotations:
 				if annot['description'].startswith("BAD_"):
 					onset, duration = annot['onset'], annot['duration']
-					bad_start, bad_stop = raw.time_as_index([onset, onset + duration])
+					print(onset)
+					print(raw.first_time)
+
+					bad_start, bad_stop = raw.time_as_index([onset - raw.first_time, onset + duration - raw.first_time])
 					mask[bad_start:bad_stop] = False
-					logger.info(f"Dropped {annot['description']} segment: {onset:.2f}s to {onset + duration:.2f}s")
+					LOGGER.info(f"Dropped {annot['description']} segment: {bad_start/raw.info['sfreq']:.2f}s to {bad_stop/raw.info['sfreq'] :.2f}s")
 
 			# Step 2: Include only armbr_fit segments
 			armbr_annots = [
 				annot for annot in raw.annotations 
-				if "armbr_fit" in annot['description'].lower()
+				if annot['description'].lower() == "armbr_fit"
 			]
 
 			if not armbr_annots:
 				# No armbr_fit found, use all non-BAD data
 				data = raw.get_data(picks=picks)[:, mask]
 				total_secs = mask.sum() / raw.info['sfreq']
-				logger.info(f"No 'armbr_fit' found. Using {total_secs:.2f} seconds of non-BAD data.")
+				LOGGER.info(f"No 'armbr_fit' found. Using {total_secs:.2f} seconds of non-BAD data.")
 			else:
 				segments = []
 				for annot in armbr_annots:
 					onset, duration = annot['onset'], annot['duration']
-					seg_start, seg_stop = raw.time_as_index([onset, onset + duration])
+					seg_start, seg_stop = raw.time_as_index([onset- raw.first_time, onset + duration- raw.first_time])
 					segment_mask = mask[seg_start:seg_stop]
 					if np.any(segment_mask):
 						segment_data = raw.get_data(picks=picks, start=seg_start, stop=seg_stop)
 						segments.append(segment_data[:, segment_mask])
-						start_sec = seg_start / raw.info['sfreq']
-						stop_sec = (seg_stop - 1) / raw.info['sfreq']
+						start_sec = (seg_start / raw.info['sfreq']) 
+						stop_sec = ((seg_stop - 1) / raw.info['sfreq'])  
+
 						duration_sec = segment_mask.sum() / raw.info['sfreq']
-						logger.info(f"Included armbr_fit: {start_sec:.2f}s to {stop_sec:.2f}s ({duration_sec:.2f}s used)")
+						LOGGER.info(f"Included armbr_fit: {start_sec:.2f}s to {stop_sec:.2f}s ({duration_sec:.2f}s used)")
 				data = np.concatenate(segments, axis=1) if segments else np.empty((len(picks), 0))
 
 		# Save output to class variables
@@ -96,17 +131,18 @@ class ARMBR:
 		self.sfreq  			= raw.info['sfreq']
 		self.ch_names	 		= raw.ch_names
 		self._channel_indices	= [i for i, ch_type  in enumerate(raw.get_channel_types()) if ch_type == 'eeg']
-		self._eeg_indices		= pick_types(raw.info, eeg=True)
+		self._eeg_indices		= [raw.ch_names.index(ch) for ch in raw.copy().pick('eeg').ch_names]
+		self._raw_info			= raw.info
 		
 		self._run_armbr(self.ch_name)
 		self.is_fitted = True  
 		
-		logger.info("ARMBR model fitting complete.")
+		LOGGER.info("ARMBR model fitting complete.")
 		
 		return self
 		
 	
-	@verbose
+	@VERBOSE
 	def apply(self, raw, picks="eeg", verbose=None):
 		"""Apply ARMBR blink removal to raw EEG data.
 
@@ -124,25 +160,27 @@ class ARMBR:
 		self : instance of ARMBR
 			Returns the current instance with ARMBR applied.
 		"""
+		import mne.utils
 		
 		if not getattr(self, "is_fitted", False):
 			raise RuntimeError("You must call .fit() before .apply().")
 	
 		
 		# Check if raw is preloaded (required to modify data)
-		_check_preload(raw, 'apply')
+		mne.utils._check_preload(raw, 'apply')
 	
 		eeg_raw		= _rotate_arr( raw.get_data(picks=picks) )
-		eeg_clean	= eeg_raw .dot(self.blink_spatial_pattern)
+		eeg_clean	= eeg_raw.dot(self.blink_projection_matrix)
 		
 		# Apply cleaned data back to Raw object
 		raw.apply_function(lambda x: eeg_clean.T, picks=picks, channel_wise=False)
 		
-		logger.info("ARMBR blink suppression applied to raw data.")
+		LOGGER.info("ARMBR blink suppression applied to raw data.")
 		
 		return self
 		
 		
+	@VERBOSE
 	def plot(self, show=True, verbose=None):
 		"""Plot EEG signals before and after ARMBR cleaning.
 
@@ -169,23 +207,28 @@ class ARMBR:
 		cleaned = _rotate_arr(self.cleaned_eeg)
 
 		n_channels = raw_eeg.shape[1]
+
 		offset = np.max(np.std(raw_eeg)) * 10
 
 		fig, axes = plt.subplots(1, 2, figsize=(10, 6), sharey=True)
 
 		# Plot original EEG
+		time_samples = np.arange(len(raw_eeg[:, 0]))/self.sfreq
+		
 		for idx in range(n_channels):
-			axes[0].plot(raw_eeg[:, idx] - offset * idx, color='r')
+			axes[0].plot(time_samples, raw_eeg[:, idx] - offset * idx, color='r')
 		axes[0].set_title("Before ARMBR")
 		axes[0].set_xlabel("Time (samples)")
 		axes[0].set_yticks([])
-
+		axes[0].set_xlim([time_samples[0], time_samples[-1]])
+		
 		# Plot cleaned EEG
 		for idx in range(n_channels):
-			axes[1].plot(cleaned[:, idx] - offset * idx, color='k')
+			axes[1].plot(time_samples, cleaned[:, idx] - offset * idx, color='k')
 		axes[1].set_title("After ARMBR")
 		axes[1].set_xlabel("Time (samples)")
 		axes[1].set_yticks([])
+		axes[1].set_xlim([time_samples[0], time_samples[-1]])
 
 		fig.suptitle("ARMBR Cleaning Results", fontsize=14)
 
@@ -193,10 +236,65 @@ class ARMBR:
 			plt.tight_layout()
 			plt.show()
 		
-		logger.info("Plotted before/after ARMBR EEG.")
+		LOGGER.info("Plotted before/after ARMBR EEG.")
 		return self, fig
 		
-		
+	
+
+	def plot_blink_patterns(self, show=True):
+		import matplotlib.pyplot as plt
+		from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+
+		n_components = self.blink_spatial_pattern.shape[1]
+		abs_max = np.max(np.abs(self.blink_spatial_pattern))
+		clim_val = np.ceil(abs_max * 1000000) / 1000000  # symmetric rounded clim
+		vlim = (-clim_val, clim_val)
+
+		n_cols = 1
+		n_rows = n_components
+
+		fig, axes = plt.subplots(n_rows, n_cols, figsize=(4, 2.5 * n_rows))
+		if n_components == 1:
+			axes = np.array([axes])
+		axes = axes.flatten()
+
+		# Create placeholder for colorbar axis
+		divider = make_axes_locatable(axes[-1])
+		cbar_ax = divider.append_axes("right", size="5%", pad=0.05)
+
+		for i in range(n_components):
+			pattern = self.blink_spatial_pattern[:, i].squeeze()
+
+			im, cm = mne.viz.plot_topomap(
+				pattern,
+				self._raw_info,
+				ch_type='eeg',
+				sensors=True,
+				contours=False,
+				cmap='RdBu_r',
+				axes=axes[i],
+				show=show,
+				vlim=vlim
+			)
+			axes[i].set_title(f'Component {i+1}', fontsize=10)
+
+
+		# Shared colorbar
+		clim = dict(kind='value', lims=[-clim_val, 0, clim_val])
+		cbar = plt.colorbar(im, cax=cbar_ax, orientation='vertical')
+		cbar.ax.set_ylabel("Pattern value", rotation=270, labelpad=15)
+
+		plt.tight_layout()
+		if show:
+			plt.show()
+
+		return self, plt
+
+
+
+
+
 
 	
 	def copy(self):
@@ -208,7 +306,7 @@ class ARMBR:
 			A deep copy of the current object.
 		"""
 		inst = copy.deepcopy(self)
-		logger.info("ARMBR object copied.")
+		LOGGER.info("ARMBR object copied.")
 		return inst
 			
 
@@ -228,7 +326,7 @@ class ARMBR:
 
 		if is_all_int:
 			self.ch_name_inx = [int(ch) for ch in blink_chs]
-			logger.info(f"Blink channels (indices): {self.ch_name_inx}")
+			LOGGER.info(f"Blink channels (indices): {self.ch_name_inx}")
 
 		elif is_all_str:
 			self.ch_name = blink_chs  # Save user-specified names
@@ -245,7 +343,7 @@ class ARMBR:
 
 			self.ch_name = valid_names
 			self.ch_name_inx = ch_indices
-			logger.info(f"Blink channels (names): {self.ch_name}")
+			LOGGER.info(f"Blink channels (names): {self.ch_name}")
 
 		else:
 			raise ValueError("Blink channel list must contain only channel names or only indices.")
@@ -264,11 +362,16 @@ class ARMBR:
 		"""
 		# Resolve channel names or indices
 		self._prep_blink_channels(blink_chs)
+		
+		if self.alpha.lower() == 'auto':
+			alpha = -1
+		else:
+			alpha = int(alpha)
 
 		if len(self.ch_name_inx) > 0:
 			# Apply ARMBR
-			x_purged, best_alpha, blink_mask, blink_comp, spatial_pattern = _armbr(
-				self._eeg_data, self.ch_name_inx, self.sfreq, self.alpha
+			x_purged, best_alpha, blink_mask, blink_comp, blink_spatial_pattern, blink_projection_matrix = run_armbr(
+				self._eeg_data, self.ch_name_inx, self.sfreq, alpha
 			)
 
 			# Store outputs
@@ -276,7 +379,8 @@ class ARMBR:
 			self.best_alpha = best_alpha
 			self.blink_mask = blink_mask
 			self.blink_comp = blink_comp
-			self.blink_spatial_pattern = spatial_pattern
+			self.blink_spatial_pattern = blink_spatial_pattern
+			self.blink_projection_matrix = blink_projection_matrix
 
 		else:
 			raise RuntimeError("No blink channels were identified. ARMBR was not performed.")
@@ -619,7 +723,7 @@ def _blink_selection(eeg_orig, eeg_filt, blink_filt, alpha, mask_in=None):
 
 	# Project out blink if ref_mask contains any positive sample
 	if np.sum(ref_mask) != 0:
-		blink_pattern, _, _, _, blink_artifact, eeg_clean = _projectout(
+		blink_projection_matrix, _, blink_pattern, _, blink_artifact, eeg_clean = _projectout(
 			eeg_orig, reduced_eeg, ref_mask, mask_in
 		)
 	else:
@@ -627,11 +731,11 @@ def _blink_selection(eeg_orig, eeg_filt, blink_filt, alpha, mask_in=None):
 		blink_artifact = np.array([])
 		blink_pattern = np.array([])
 
-	return eeg_clean, blink_artifact, ref_mask, blink_pattern
+	return eeg_clean, blink_artifact, ref_mask, blink_pattern, blink_projection_matrix
 
 
 
-def _armbr(X, blink_ch_idx, sfreq, alpha=-1.0):
+def run_armbr(X, blink_ch_idx, sfreq, alpha=-1.0):
 	"""Run ARMBR blink removal on multichannel EEG data.
 
 	Parameters
@@ -658,6 +762,8 @@ def _armbr(X, blink_ch_idx, sfreq, alpha=-1.0):
 	blink_pattern : ndarray
 		Spatial pattern of the blink.
 	"""
+	import mne.utils, mne.filter
+	
 	X = _rotate_arr(X)
 	good_eeg, _, good_blinks = _data_prep(X, sfreq, blink_ch_idx)
 
@@ -665,13 +771,17 @@ def _armbr(X, blink_ch_idx, sfreq, alpha=-1.0):
 		alpha_range = np.arange(0.01, 10, 0.1)
 		energy_ratios = []
 
-		with ProgressBar(alpha_range, mesg='Running ARMBR') as pb:
+		with mne.utils.ProgressBar(alpha_range, mesg='Running ARMBR') as pb:
 			for test_alpha in pb:
-				x_tmp, blink_tmp, _, _ = _blink_selection(X, good_eeg, good_blinks, test_alpha)
+				x_tmp, blink_tmp, _, _, _ = _blink_selection(X, good_eeg, good_blinks, test_alpha)
 
 				if blink_tmp.size > 0 and not np.isnan(np.sum(blink_tmp)):
-					bpf = scipy.signal.firwin(10, [1, 8], pass_zero=False, fs=sfreq)
-					blink_filt = scipy.signal.filtfilt(bpf, 1, blink_tmp.T).T
+
+					blink_filt = mne.filter.filter_data(blink_tmp.T, sfreq=sfreq, l_freq=1, h_freq=8, method='iir', iir_params=dict(order=4, ftype='butter'), verbose=False).T				
+					#import scipy.signal
+					#bpf = scipy.signal.firwin(10, [1, 8], pass_zero=False, fs=sfreq)
+					#blink_filt = scipy.signal.filtfilt(bpf, 1, blink_tmp.T).T
+					
 					ratio = np.sum(blink_filt ** 2) / np.sum((blink_tmp - blink_filt) ** 2)
 					energy_ratios.append(ratio)
 				else:
@@ -682,7 +792,7 @@ def _armbr(X, blink_ch_idx, sfreq, alpha=-1.0):
 
 		if energy_ratios.size > 0:
 			best_alpha = alpha_range[np.argmax(energy_ratios)]
-			x_clean, blink_comp, ref_mask, blink_pattern = _blink_selection(X, good_eeg, good_blinks, best_alpha)
+			x_clean, blink_comp, ref_mask, blink_pattern, blink_projection_matrix = _blink_selection(X, good_eeg, good_blinks, best_alpha)
 		else:
 			x_clean = X
 			blink_comp = np.array([])
@@ -691,8 +801,8 @@ def _armbr(X, blink_ch_idx, sfreq, alpha=-1.0):
 			best_alpha = None
 
 	else:
-		x_clean, blink_comp, ref_mask, blink_pattern = _blink_selection(X, good_eeg, good_blinks, alpha)
+		x_clean, blink_comp, ref_mask, blink_pattern, blink_projection_matrix = _blink_selection(X, good_eeg, good_blinks, alpha)
 		best_alpha = alpha
 
-	return x_clean, best_alpha, ref_mask, blink_comp, blink_pattern
+	return x_clean, best_alpha, ref_mask, blink_comp, blink_pattern, blink_projection_matrix
 
