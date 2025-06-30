@@ -1,18 +1,34 @@
 # Authors:	Ludvik Alkhoury <Ludvik.alkhoury@gmail.com>
+#			Giacomo Scanavini <scanavini.giacomo@gmail.com>
 #			N. Jeremy Hill <jezhill@gmail.com>
 # License: BSD-3-Clause
-"""
-TODO:  this is about removing blinks from EEG
 
+"""
+Artifact-reference multivariate backward regression (ARMBR): a novel method for EEG blink artifact removal with minimal data requirements
+
+ARMBR is a lightweight and easy-to-use method for blink artifact removal from EEG signals using multivariate backward regression. 
+The algorithm detects the times at which eye blinks occur and then estimates their linear scalp projection by regressing a simplified, 
+time-locked reference signal against the multichannel EEG. This projection is used to suppress blink-related components while preserving 
+underlying brain signals. ARMBR requires minimal training data, does not depend on dedicated EOG channels, and operates robustly in both 
+offline and real-time (online) settings, including BCI applications.
+
+This module implements the ARMBR algorithm, described in:
+
+Alkhoury L, Scanavini G, Louviot S, Radanovic A, Shah SA, Hill NJ. (2025).
+"Artifact-reference multivariate backward regression (ARMBR): a novel method for EEG blink artifact removal with minimal data requirements."
+Journal of Neural Engineering, 22(3), 036048.
+https://doi.org/10.1088/1741-2552/ade566
+
+(see ARMBR.bibtex for the BibTeX entry)
+
+
+The core algorithm supports both standalone and MNE integration via the `ARMBR` class:
 from armbr import run_armbr   # core non-MNE-dependent code (just needs numpy)
 from armbr import ARMBR       # MNE-compatible wrapper class
-
-The ARMBR algorithm is described by
-	Alkhoury, ..... (2025) Journal of Neural Engineering, ...
-	
-	(see ARMBR.bibtex for the BibTeX entry)
-
 """
+
+
+
 import copy
 
 import numpy as np
@@ -31,15 +47,40 @@ __version__ = '2.0.0'  # @VERSION_INFO@
 
 class ARMBR:
 	"""
-	TODO: class documentation (an MNE-compatible wrapper class for
-	removing blinks and other electrooculographic artifacts from EEG
-	using the ARMBR algorithm (Alkhoury et al 2025 JNE,  see
-	ARMBR.bibtex for the BibTeX entry).
+	MNE-compatible wrapper for ARMBR, a blink artifact removal algorithm for EEG.
+
+	ARMBR identifies and suppresses blink artifacts using multivariate backward
+	regression. It leverages a binarized blink reference signal to estimate and
+	project out blink-related spatial components. The method requires only a small
+	amount of training data and works without requiring ICA or dedicated EOG
+	channels. It is especially suitable for real-time and online BCI scenarios.
+
+	Parameters
+	----------
+	ch_name : list of str | list of int | None
+		Names or indices of EEG channels highly affected by blinks (e.g. Fp1, Fp2).
+		These are used to construct the blink reference signal. If None, defaults to [].
+	alpha : float | 'auto'
+		Blink detection threshold factor. If 'auto', ARMBR selects the threshold
+		automatically using method described in Section 4. Threshold selection (see Alkhoury et al., 2025).
+
+	References
+	----------
+	L. Alkhoury et al. (2025), Journal of Neural Engineering, 22(3), 036048.
+	https://doi.org/10.1088/1741-2552/ade566
+
 	"""
 	
 	bibtex = """
-		@alkhoury2025_armbr {
-			TODO
+		@article{alkhoury2025_armbr,
+			title={Artifact-reference multivariate backward regression (ARMBR): a novel method for EEG blink artifact removal with minimal data requirements},
+			author={Alkhoury, Ludvik and Scanavini, G and Louviot, S and Radanovic, A and Shah, SA and Hill, NJ},
+			journal={Journal of Neural Engineering},
+			volume={22},
+			number={3},
+			pages={036048},
+			year={2025},
+			doi={10.1088/1741-2552/ade566}
 		}
 	"""
 	
@@ -48,7 +89,22 @@ class ARMBR:
 					alpha   =	'auto',
 					):
 		"""
-		TODO: explain what ch_name and alpha are and how they work
+		Initialize ARMBR with optional blink channel specification and threshold strategy.
+
+		Parameters
+		----------
+		ch_name : list of str | list of int | None
+			Names or indices of EEG channels expected to show prominent blink activity.
+			Common choices include Fp1, Fp2, or frontal channels near the eyes.
+		alpha : float | 'auto'
+			Blink detection threshold multiplier. If 'auto', the optimal threshold
+			is selected automatically by maximizing the low-frequency-to-high-frequency
+			energy ratio in the extracted blink component.
+
+		Notes
+		-----
+		The user-specified channels should capture prominent blink deflections.
+		No EOG channels are required.
 		"""
 		self.ch_name	= ch_name or []
 		self.alpha 		= alpha
@@ -63,22 +119,44 @@ class ARMBR:
 				stop	=	None, 
 				verbose	=	None
 			):
-		"""Fit ARMBR model using selected data from raw instance.
+		"""
+		Fit the ARMBR model using raw EEG data.
+
+		This method prepares the data for blink artifact removal by identifying
+		clean EEG segments, extracting the relevant samples, and computing the
+		ARMBR spatial projection. Training can use either manually specified 
+		time ranges, annotated segments labeled "armbr_fit", or all non-rejected
+		data (excluding 'BAD_' annotations).
 
 		Parameters
 		----------
 		raw : instance of mne.io.BaseRaw
-			The raw EEG data.
+			Continuous raw EEG recording.
 		picks : str | list | slice | None
-			Channels to include. Defaults to 'eeg'.
-		start : int | None
-			Sample time (in second) to start from (if manually specifying segment).
-		stop : int | None
-			Sample time (in second) to stop at (if manually specifying segment).
+			Channels to include. Defaults to 'eeg'. Can be a string like 'eeg',
+			a list of channel names, or indices.
+		start : float | None
+			Start time in seconds for fitting. If provided, overrides annotations
+			and uses this exact time range.
+		stop : float | None
+			Stop time in seconds for fitting. If provided with `start`, overrides
+			annotations and uses this exact time range.
 		verbose : bool | str | int | None
-			Control verbosity of the logging output.
+			Controls verbosity of the log output.
+
+		Returns
+		-------
+		self : instance of ARMBR
+			The fitted instance, with spatial weights and state stored.
+
+		Notes
+		-----
+		If 'armbr_fit' annotations are present, those segments are prioritized.
+		Otherwise, all data not marked by 'BAD_' annotations is used. If both
+		`start` and `stop` are provided, these override annotations entirely.
+		The model must be fitted before calling `.apply()` or `.plot()`.
 		"""
-		
+
 		
 		if start is not None and stop is not None:
 			# User provided manual segment (in samples)
@@ -144,7 +222,12 @@ class ARMBR:
 	
 	@VERBOSE
 	def apply(self, raw, picks="eeg", verbose=None):
-		"""Apply ARMBR blink removal to raw EEG data.
+		"""
+		Apply ARMBR blink removal to raw EEG data.
+		
+		This method removes blink artifacts from the specified channels using
+		the spatial projection matrix estimated during `.fit()`. The projection
+		is applied directly to the data via MNE's `apply_function`.
 
 		Parameters
 		----------
@@ -159,7 +242,20 @@ class ARMBR:
 		-------
 		self : instance of ARMBR
 			Returns the current instance with ARMBR applied.
+
+		Raises
+		------
+		RuntimeError
+			If `.fit()` has not been called before this method.
+		ValueError
+			If the raw object is not preloaded (since in-place editing is required).
+
+		Notes
+		-----
+		This modifies the input `raw` object in-place. To preserve the original,
+		use `.copy()` before calling `.apply()`.
 		"""
+
 		import mne.utils
 		
 		if not getattr(self, "is_fitted", False):
@@ -182,7 +278,12 @@ class ARMBR:
 		
 	@VERBOSE
 	def plot(self, show=True, verbose=None):
-		"""Plot EEG signals before and after ARMBR cleaning.
+		"""
+		Plot EEG signals before and after ARMBR cleaning.
+		
+		This diagnostic plot shows side-by-side traces of the original and
+		ARMBR-cleaned EEG data from the training set. It helps visually assess
+		the effectiveness of the blink suppression.
 
 		Parameters
 		----------
@@ -193,8 +294,21 @@ class ARMBR:
 			
 		Returns
 		-------
+		self : instance of ARMBR
+			Returns the current instance for chaining.
 		fig : matplotlib.figure.Figure
-			The matplotlib figure containing the plots.
+			Matplotlib figure containing the before/after subplots.
+
+		Raises
+		------
+		RuntimeError
+			If `.fit()` has not been called before this method.
+
+		Notes
+		-----
+		Red traces indicate raw EEG. Black traces show cleaned data.
+		Each channel is vertically offset for readability.
+		This plot only shows data used during training (`fit()`).
 		"""
 
 		if not getattr(self, "is_fitted", False):
@@ -242,6 +356,33 @@ class ARMBR:
 	
 
 	def plot_blink_patterns(self, show=True):
+		
+		"""
+		Visualize the spatial blink components estimated by ARMBR.
+
+		This method generates topographic plots of each component in the
+		blink spatial pattern matrix, which represent how blinks manifest
+		across the EEG scalp sensors.
+
+		Parameters
+		----------
+		show : bool
+			If True, the plot is displayed immediately. Default is True.
+
+		Returns
+		-------
+		self : instance of ARMBR
+			Returns the current instance for chaining.
+		plt : module
+			The matplotlib.pyplot module with the figure and axes created.
+
+		Notes
+		-----
+		This function uses `mne.viz.plot_topomap` to display scalp maps for
+		each spatial component. The colormap is centered at zero and scaled
+		symmetrically based on the maximum absolute pattern value.
+		"""
+
 		import matplotlib.pyplot as plt
 		from mpl_toolkits.axes_grid1 import make_axes_locatable
 
@@ -301,12 +442,21 @@ class ARMBR:
 
 	
 	def copy(self):
-		"""Create a deep copy of the ARMBR instance.
+		"""
+		Create a deep copy of the ARMBR instance.
+		
+		This is useful for preserving the current model state before applying
+		changes such as refitting or reapplying to different data.
 
 		Returns
 		-------
 		inst : instance of ARMBR
-			A deep copy of the current object.
+			A deep copy of the current object, including all internal state.
+
+		Notes
+		-----
+		The copied instance is independent of the original and can be modified
+		or reapplied without affecting the original.
 		"""
 		inst = copy.deepcopy(self)
 		LOGGER.info("ARMBR object copied.")
@@ -317,13 +467,29 @@ class ARMBR:
 
 
 	def _prep_blink_channels(self, blink_chs):
-		"""Resolve blink channel names or indices to internal format.
+		"""
+		Standardize user-specified blink channels to internal index format.
+
+		This method resolves the `blink_chs` argument passed to ARMBR into
+		canonical numeric indices based on `self.ch_names`. Accepts either
+		a list of integers (indices) or a list of strings (channel names).
 
 		Parameters
 		----------
 		blink_chs : list of str | list of int
-			List of blink channels as names or indices.
+			Blink-affected EEG channels. Can be specified by name or index.
+
+		Raises
+		------
+		ValueError
+			If the input is a mix of names and indices, or contains invalid types.
+
+		Notes
+		-----
+		This method sets `self.ch_name` and `self.ch_name_inx` attributes
+		based on the resolved input.
 		"""
+
 		is_all_int = all(isinstance(ch, int) or (isinstance(ch, str) and ch.isdigit()) for ch in blink_chs)
 		is_all_str = all(isinstance(ch, str) for ch in blink_chs)
 
@@ -356,13 +522,40 @@ class ARMBR:
 
 		
 	def _run_armbr(self, blink_chs):
-		"""Run the ARMBR blink removal algorithm.
+		"""
+		Internal method to execute the ARMBR algorithm on training data.
+
+		This function estimates blink components by performing multivariate
+		backward regression using a simplified binary reference signal constructed
+		from the specified blink channels. The result includes a projection matrix
+		that can be used to suppress blink artifacts in new data.
 
 		Parameters
 		----------
 		blink_chs : list of str | list of int
-			Blink channel names or indices.
+			Names or indices of channels used to construct the blink reference.
+
+		Returns
+		-------
+		self : instance of ARMBR
+			Returns the instance with fitted model attributes stored.
+
+		Raises
+		------
+		RuntimeError
+			If no valid blink channels could be resolved.
+
+		Notes
+		-----
+		Stores internal variables including:
+		- `cleaned_eeg`: blink-suppressed training data
+		- `best_alpha`: threshold used (if auto)
+		- `blink_mask`: binary vector marking blink segments
+		- `blink_comp`: blink time course (latent variable)
+		- `blink_spatial_pattern`: scalp patterns
+		- `blink_projection_matrix`: projection operator for cleaning
 		"""
+
 		# Resolve channel names or indices
 		self._prep_blink_channels(blink_chs)
 		
@@ -390,25 +583,129 @@ class ARMBR:
 			
 		return self
 	
-		
-		
+
+
+
+def run_armbr(X, blink_ch_idx, sfreq, alpha=-1.0):
+	"""
+	Run ARMBR blink artifact removal on multichannel EEG data.
+
+	This function implements the full ARMBR algorithm pipeline on continuous EEG
+	data. It identifies blink artifacts from frontal EEG channels, extracts a
+	low-rank blink component, estimates its spatial distribution, and subtracts
+	it from the signal using multivariate backward regression.
+
+	Parameters
+	----------
+	X : ndarray, shape (n_samples, n_channels)
+		Input EEG data. Each row is a time sample; each column is a channel.
+	blink_ch_idx : list of int
+		Indices of channels strongly affected by blinks (e.g. Fp1, Fp2).
+	sfreq : float
+		Sampling frequency in Hz.
+	alpha : float
+		Threshold multiplier for blink detection. If set to -1, the algorithm
+		performs automatic optimization based on the energy ratio of low- to
+		high-frequency components.
+
+	Returns
+	-------
+	x_clean : ndarray, shape (n_samples, n_channels)
+		EEG data with blink artifacts removed.
+	best_alpha : float or None
+		The optimal alpha value used. If alpha was set manually, this matches
+		the input; if optimized, it is the best value found.
+	ref_mask : ndarray, shape (n_samples,)
+		Binary mask marking detected blink events.
+	blink_comp : ndarray, shape (n_samples,)
+		Time course of the extracted blink component.
+	blink_pattern : ndarray, shape (n_channels,)
+		Estimated spatial topography of the blink.
+	blink_projection_matrix : ndarray, shape (n_channels, n_channels)
+		Spatial projection matrix used to remove blink activity.
+
+	Notes
+	-----
+	When `alpha=-1`, the algorithm sweeps a range of values to maximize the
+	low-frequency to high-frequency energy ratio of the blink component, as
+	described in Alkhoury et al. (2025). The returned `blink_projection_matrix`
+	can be applied to other EEG data for online or batch blink suppression.
+	"""
+
+	import mne.utils, mne.filter
+	
+	X = _rotate_arr(X)
+	good_eeg, _, good_blinks = _data_prep(X, sfreq, blink_ch_idx)
+
+	if alpha == -1:
+		alpha_range = np.arange(0.01, 10, 0.1)
+		energy_ratios = []
+
+		with mne.utils.ProgressBar(alpha_range, mesg='Running ARMBR') as pb:
+			for test_alpha in pb:
+				x_tmp, blink_tmp, _, _, _ = _blink_selection(X, good_eeg, good_blinks, test_alpha)
+
+				if blink_tmp.size > 0 and not np.isnan(np.sum(blink_tmp)):
+
+					blink_filt = mne.filter.filter_data(blink_tmp.T, sfreq=sfreq, l_freq=1, h_freq=8, method='iir', iir_params=dict(order=4, ftype='butter'), verbose=False).T				
+					#import scipy.signal
+					#bpf = scipy.signal.firwin(10, [1, 8], pass_zero=False, fs=sfreq)
+					#blink_filt = scipy.signal.filtfilt(bpf, 1, blink_tmp.T).T
+					
+					ratio = np.sum(blink_filt ** 2) / np.sum((blink_tmp - blink_filt) ** 2)
+					energy_ratios.append(ratio)
+				else:
+					break
+
+		energy_ratios = np.array(energy_ratios)
+		alpha_range = alpha_range[:len(energy_ratios)]
+
+		if energy_ratios.size > 0:
+			best_alpha = alpha_range[np.argmax(energy_ratios)]
+			x_clean, blink_comp, ref_mask, blink_pattern, blink_projection_matrix = _blink_selection(X, good_eeg, good_blinks, best_alpha)
+		else:
+			x_clean = X
+			blink_comp = np.array([])
+			ref_mask = np.array([])
+			blink_pattern = np.array([])
+			best_alpha = None
+
+	else:
+		x_clean, blink_comp, ref_mask, blink_pattern, blink_projection_matrix = _blink_selection(X, good_eeg, good_blinks, alpha)
+		best_alpha = alpha
+
+	return x_clean, best_alpha, ref_mask, blink_comp, blink_pattern, blink_projection_matrix
+
+	
 # ============================================================
 # Internal utility functions (not intended for end-user access)
 # ============================================================
 
 def _rotate_arr(X):
-	"""Ensure EEG array has shape (n_samples, n_channels).
+	"""
+	Ensure EEG array is in (n_samples, n_channels) shape.
+
+	This helper function standardizes the orientation of EEG data,
+	so that time samples are along the first axis and channels along
+	the second. It handles 1D arrays, transposes if necessary, and
+	returns the adjusted array.
 
 	Parameters
 	----------
 	X : ndarray
-		Input EEG array. Can be 1D, (n_channels, n_samples), or already (n_samples, n_channels).
+		Input EEG data. Can be 1D, (n_channels, n_samples), or (n_samples, n_channels).
 
 	Returns
 	-------
 	X_out : ndarray
-		EEG array in shape (n_samples, n_channels).
+		Output array in shape (n_samples, n_channels).
+
+	Notes
+	-----
+	This is useful when loading or manipulating EEG matrices, since
+	EEG libraries often vary in dimension conventions.
 	"""
+
 	X = np.asarray(X)
 
 	if X.ndim == 1:
@@ -420,7 +717,8 @@ def _rotate_arr(X):
 
 
 def _max_amp(data, sfreq, window_size=15, shift_size=15):
-	"""Compute maximum absolute amplitude over sliding windows.
+	"""
+	Compute maximum absolute amplitude over sliding windows.
 
 	Parameters
 	----------
@@ -437,7 +735,13 @@ def _max_amp(data, sfreq, window_size=15, shift_size=15):
 	-------
 	max_values : list of float
 		Maximum absolute amplitudes for each window.
+
+	Notes
+	-----
+	This function is used to assess blink signal amplitude variability
+	for segment selection in ARMBR training.
 	"""
+	
 	window_pts = int(window_size * sfreq)
 	shift_pts = int(shift_size * sfreq)
 
@@ -452,7 +756,8 @@ def _max_amp(data, sfreq, window_size=15, shift_size=15):
 
 	
 def _segment(data, sfreq, window_size=15, shift_size=15):
-	"""Segment time-series data into overlapping windows.
+	"""
+	Segment time-series data into overlapping windows.
 
 	Parameters
 	----------
@@ -468,7 +773,7 @@ def _segment(data, sfreq, window_size=15, shift_size=15):
 	Returns
 	-------
 	segments : list of ndarray
-		List of segmented arrays of shape (window_pts, ...)
+		List of windows (each of shape (window_pts, ...)) extracted from input data.
 	"""
 	window_pts = int(window_size * sfreq)
 	shift_pts = int(shift_size * sfreq)
@@ -483,7 +788,8 @@ def _segment(data, sfreq, window_size=15, shift_size=15):
 	
 	
 def _data_select(data, init_size=3, std_threshold=5.0):
-	"""Filter outliers from a 1D signal based on standard deviation threshold.
+	"""
+	Filter outliers from a 1D signal based on standard deviation threshold.
 
 	Parameters
 	----------
@@ -538,7 +844,8 @@ def _data_select(data, init_size=3, std_threshold=5.0):
 	
 	
 def _data_prep(eeg, sfreq, blink_indices):
-	"""Prepare EEG data by extracting segments with clean blink signals.
+	"""
+	Prepare EEG data by extracting segments with clean blink signals.
 
 	Parameters
 	----------
@@ -557,6 +864,11 @@ def _data_prep(eeg, sfreq, blink_indices):
 		Original EEG data (possibly transposed).
 	good_blinks : ndarray
 		Blink reference signal (1D) from clean segments.
+	
+	Notes
+	-----
+	This function handles preprocessing for the blink training pipeline, including
+	signal polarity alignment, segmentation, and amplitude-based filtering.
 	"""
 	# Ensure EEG is (n_samples, n_channels)
 	if eeg.shape[0] < eeg.shape[1]:
@@ -593,7 +905,8 @@ def _data_prep(eeg, sfreq, blink_indices):
 	
 
 def _projectout(X, X_reduced, blink_mask, mask_in=None):
-	"""Project out blink components from multichannel EEG data.
+	"""
+	Project out blink components from multichannel EEG data.
 
 	Parameters
 	----------
@@ -621,7 +934,13 @@ def _projectout(X, X_reduced, blink_mask, mask_in=None):
 		Estimated blink components.
 	x_purged : ndarray, shape (n_samples, n_channels)
 		Blink-suppressed EEG.
+
+	Notes
+	-----
+	This is the core projection engine of ARMBR. It uses spatial filtering
+	to identify and remove blink topographies while preserving neural activity.
 	"""
+
 	# Ensure correct shapes
 	X = _rotate_arr(X)
 	X_reduced = _rotate_arr(X_reduced)
@@ -698,15 +1017,23 @@ def _blink_selection(eeg_orig, eeg_filt, blink_filt, alpha, mask_in=None):
 
 	Returns
 	-------
-	eeg_clean : ndarray, shape (n_samples, n_channels)
-		EEG after blink suppression.
-	blink_artifact : ndarray, shape (n_samples,)
-		Time series of blink artifact estimated and removed.
-	ref_mask : ndarray, shape (n_samples,)
-		Binary mask of blink locations in the reference signal.
-	blink_pattern : ndarray, shape (n_channels, 1)
-		Spatial pattern of blink artifact.
+	eeg_clean : ndarray
+		Blink-suppressed EEG.
+	blink_artifact : ndarray
+		Extracted blink artifact waveform.
+	ref_mask : ndarray
+		Binary mask marking blink time points.
+	blink_pattern : ndarray
+		Spatial blink topography.
+	blink_projection_matrix : ndarray
+		Projection matrix used to remove blink activity.
+
+	Notes
+	-----
+	Uses IQR-based thresholding on the blink signal to detect blink events,
+	then estimates and removes corresponding spatial blink components.
 	"""
+
 	n_channels = eeg_orig.shape[1]
 
 	if mask_in is None:
@@ -736,76 +1063,4 @@ def _blink_selection(eeg_orig, eeg_filt, blink_filt, alpha, mask_in=None):
 
 	return eeg_clean, blink_artifact, ref_mask, blink_pattern, blink_projection_matrix
 
-
-
-def run_armbr(X, blink_ch_idx, sfreq, alpha=-1.0):
-	"""Run ARMBR blink removal on multichannel EEG data.
-
-	Parameters
-	----------
-	X : ndarray, shape (n_samples, n_channels)
-		Input EEG data.
-	blink_ch_idx : list of int
-		Indices of blink-related channels to use for reference.
-	sfreq : float
-		Sampling frequency in Hz.
-	alpha : float
-		Blink detection threshold scaling factor. If -1, automatically optimized.
-
-	Returns
-	-------
-	x_clean : ndarray, shape (n_samples, n_channels)
-		EEG with blink artifacts removed.
-	best_alpha : float or None
-		Optimal alpha value found (or input alpha if not optimized).
-	ref_mask : ndarray
-		Binary mask indicating blink locations.
-	blink_comp : ndarray
-		Extracted blink component.
-	blink_pattern : ndarray
-		Spatial pattern of the blink.
-	"""
-	import mne.utils, mne.filter
-	
-	X = _rotate_arr(X)
-	good_eeg, _, good_blinks = _data_prep(X, sfreq, blink_ch_idx)
-
-	if alpha == -1:
-		alpha_range = np.arange(0.01, 10, 0.1)
-		energy_ratios = []
-
-		with mne.utils.ProgressBar(alpha_range, mesg='Running ARMBR') as pb:
-			for test_alpha in pb:
-				x_tmp, blink_tmp, _, _, _ = _blink_selection(X, good_eeg, good_blinks, test_alpha)
-
-				if blink_tmp.size > 0 and not np.isnan(np.sum(blink_tmp)):
-
-					blink_filt = mne.filter.filter_data(blink_tmp.T, sfreq=sfreq, l_freq=1, h_freq=8, method='iir', iir_params=dict(order=4, ftype='butter'), verbose=False).T				
-					#import scipy.signal
-					#bpf = scipy.signal.firwin(10, [1, 8], pass_zero=False, fs=sfreq)
-					#blink_filt = scipy.signal.filtfilt(bpf, 1, blink_tmp.T).T
-					
-					ratio = np.sum(blink_filt ** 2) / np.sum((blink_tmp - blink_filt) ** 2)
-					energy_ratios.append(ratio)
-				else:
-					break
-
-		energy_ratios = np.array(energy_ratios)
-		alpha_range = alpha_range[:len(energy_ratios)]
-
-		if energy_ratios.size > 0:
-			best_alpha = alpha_range[np.argmax(energy_ratios)]
-			x_clean, blink_comp, ref_mask, blink_pattern, blink_projection_matrix = _blink_selection(X, good_eeg, good_blinks, best_alpha)
-		else:
-			x_clean = X
-			blink_comp = np.array([])
-			ref_mask = np.array([])
-			blink_pattern = np.array([])
-			best_alpha = None
-
-	else:
-		x_clean, blink_comp, ref_mask, blink_pattern, blink_projection_matrix = _blink_selection(X, good_eeg, good_blinks, alpha)
-		best_alpha = alpha
-
-	return x_clean, best_alpha, ref_mask, blink_comp, blink_pattern, blink_projection_matrix
 
