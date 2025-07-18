@@ -424,7 +424,7 @@ class ARMBR:
 				contours=False,
 				cmap='RdBu_r',
 				axes=axes[i],
-				show=show,
+				show=False,
 				vlim=vlim
 			)
 			axes[i].set_title('Component {}'.format(i + 1), fontsize=10)
@@ -432,7 +432,7 @@ class ARMBR:
 
 		# Shared colorbar
 		clim = dict(kind='value', lims=[-clim_val, 0, clim_val])
-		cbar = plt.colorbar(im, cax=cbar_ax, orientation='vertical')
+		cbar = fig.colorbar(im, cax=cbar_ax, orientation='vertical')
 		cbar.ax.set_ylabel("Pattern value", rotation=270, labelpad=15)
 
 		plt.tight_layout()
