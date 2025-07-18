@@ -19,8 +19,10 @@ This module implements the ARMBR algorithm, described in:
 
 
 The core algorithm supports both standalone and MNE integration via the `ARMBR` class:
+```
 from armbr import run_armbr   # core non-MNE-dependent code (just needs numpy)
 from armbr import ARMBR       # MNE-compatible wrapper class
+```
 
 Below, we provide instructions on how to: 
 1) Download the package 
