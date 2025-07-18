@@ -11,12 +11,12 @@ offline and real-time (online) settings, including BCI applications.
 
 This module implements the ARMBR algorithm, described in:
 
-'''
+```
 Alkhoury L, Scanavini G, Louviot S, Radanovic A, Shah SA, Hill NJ. (2025).
 "Artifact-reference multivariate backward regression (ARMBR): a novel method for EEG blink artifact removal with minimal data requirements."
 Journal of Neural Engineering, 22(3), 036048.
 https://doi.org/10.1088/1741-2552/ade566
-'''
+```
 
 (see ARMBR.bibtex for the BibTeX entry)
 
