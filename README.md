@@ -175,7 +175,10 @@ raw.filter(l_freq=1, h_freq=40, method='iir', iir_params=dict(order=4, ftype='bu
 
 myarmbr = ARMBR(ch_name=['C16','C29'])
 myarmbr.fit(raw)
-myarmbr.apply(raw) # the blink spatial pattern could be applied to another raw object, for example myarmbr.apply(raw2) (assuming that raw2 shared the same montage with raw)
+myarmbr.apply(raw)
+
+# Note that the blink spatial pattern could be applied to another raw object.
+# For example myarmbr.apply(raw2); assuming both raw2 and raw have the same montage.
 
 myarmbr.plot_blink_patterns() # To plot the blink spatial pattern
 
