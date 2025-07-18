@@ -34,7 +34,7 @@ OPTS1 = parser1.parse_args()
 import numpy as np
 import mne 
 
-from ARMBR.ARMBR_Library import ARMBR
+from ARMBR import ARMBR
 
 
 filter_band		= [float(f) for f in OPTS1.filter_band.replace(' ','').split(',')]
@@ -63,16 +63,15 @@ if len(OPTS1.data_path) > 0:
 			info = mne.create_info(ch_names=ch_names, sfreq=sampling_rate, ch_types='eeg')
 			raw = mne.io.RawArray(eeg_data*1e-6, info)
 			
-		raw.filter(l_freq=filter_band[0], h_freq=filter_band[1])
+		raw.filter(l_freq=filter_band[0], h_freq=filter_band[1], method='iir', iir_params=dict(order=4, ftype='butter'), verbose=False)
 
-		myARMBR = ARMBR()
-		myARMBR.ImportFromRaw(raw)
-		myARMBR.ARMBR(blink_chan=blink_channels)
-		myARMBR.UnloadIntoRaw(raw)
+
+		myARMBR = ARMBR(blink_channels)
+		myARMBR.fit(raw)
+		myARMBR.apply(raw)
 		
 		if OPTS1.plot:
 			import matplotlib.pyplot as plt
-			
 			raw.plot()
 			plt.show()
 		
@@ -81,7 +80,6 @@ if len(OPTS1.data_path) > 0:
 		else:
 			print('Data not saved.')
 			
-
 	else: 
 		print('No blink channels found.')
 
