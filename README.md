@@ -1,10 +1,27 @@
 # ARMBR
 Version 2.0.0 
 
-This repository is the original implementation of ARMBR:    
-Artifact-Reference Multivariate Backward Regression (ARMBR) Outperforms Common EEG Blink Artifact Removal Methods
+Artifact-reference multivariate backward regression (ARMBR): a novel method for EEG blink artifact removal with minimal data requirements
 
-by Ludvik Alkhoury, Giacomo Scanavini, Samuel Louviot, Ana Radanovic, Sudhin A. Shah, and N. Jeremy Hill
+ARMBR is a lightweight and easy-to-use method for blink artifact removal from EEG signals using multivariate backward regression. 
+The algorithm detects the times at which eye blinks occur and then estimates their linear scalp projection by regressing a simplified, 
+time-locked reference signal against the multichannel EEG. This projection is used to suppress blink-related components while preserving 
+underlying brain signals. ARMBR requires minimal training data, does not depend on dedicated EOG channels, and operates robustly in both 
+offline and real-time (online) settings, including BCI applications.
+
+This module implements the ARMBR algorithm, described in:
+
+Alkhoury L, Scanavini G, Louviot S, Radanovic A, Shah SA, Hill NJ. (2025).
+"Artifact-reference multivariate backward regression (ARMBR): a novel method for EEG blink artifact removal with minimal data requirements."
+Journal of Neural Engineering, 22(3), 036048.
+https://doi.org/10.1088/1741-2552/ade566
+
+(see ARMBR.bibtex for the BibTeX entry)
+
+
+The core algorithm supports both standalone and MNE integration via the `ARMBR` class:
+from armbr import run_armbr   # core non-MNE-dependent code (just needs numpy)
+from armbr import ARMBR       # MNE-compatible wrapper class
 
 Below, we provide instructions on how to: 
 1) download the package 
