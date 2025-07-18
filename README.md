@@ -11,10 +11,12 @@ offline and real-time (online) settings, including BCI applications.
 
 This module implements the ARMBR algorithm, described in:
 
+'''
 Alkhoury L, Scanavini G, Louviot S, Radanovic A, Shah SA, Hill NJ. (2025).
 "Artifact-reference multivariate backward regression (ARMBR): a novel method for EEG blink artifact removal with minimal data requirements."
 Journal of Neural Engineering, 22(3), 036048.
 https://doi.org/10.1088/1741-2552/ade566
+'''
 
 (see ARMBR.bibtex for the BibTeX entry)
 
@@ -24,8 +26,8 @@ from armbr import run_armbr   # core non-MNE-dependent code (just needs numpy)
 from armbr import ARMBR       # MNE-compatible wrapper class
 
 Below, we provide instructions on how to: 
-1) download the package 
-2) implement the code in Matlab and Python
+1) Download the package 
+2) Implement the code in MATLAB and Python
 
 # Download Package
 
@@ -54,13 +56,13 @@ python -m pip install -e  ./Python
 
 
 
-# Matlab Implementation 
+# MATLAB Implementation 
 
-ARMBR can be used in Python as follows. First, make sure that your working directory is `Matlab`.
+ARMBR can be used in Python as follows. First, make sure that your working directory is `MATLAB`.
 
 
 ## Option 1: A generic script
-Here is how to implement ARMBR using Matlab on the semi-synthetic data used in the paper. 
+Here is how to implement ARMBR using MATLAB on the semi-synthetic data used in the paper. 
 This implementation will work with any EEG array. 
 ```
 clc; clear; close all;
@@ -114,7 +116,7 @@ Sythentic_Blink_Contaminated_EEG = BPF(Sythentic_Blink_Contaminated_EEG, fs, [1 
 Clean_EEG                        = BPF(Clean_EEG, fs, [1 40]);
 
 
-EEG = pop_importdata('dataformat','matlab','nbchan',128,'data', Sythentic_Blink_Contaminated_EEG', 'srate',fs, 'chanlocs','Biosemi128.ced');
+EEG = pop_importdata('dataformat','MATLAB','nbchan',128,'data', Sythentic_Blink_Contaminated_EEG', 'srate',fs, 'chanlocs','Biosemi128.ced');
 eeglab redraw
 
 
