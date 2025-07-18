@@ -1,5 +1,5 @@
 # ARMBR
-Version 1.0.0 
+Version 2.0.0 
 
 This repository is the original implementation of ARMBR:    
 Artifact-Reference Multivariate Backward Regression (ARMBR) Outperforms Common EEG Blink Artifact Removal Methods
@@ -39,7 +39,7 @@ python -m pip install -e  ./Python
 
 # Matlab Implementation 
 
-ARMBR can be used in Python as follows. First, make sure that your working directory is `Maltab`.
+ARMBR can be used in Python as follows. First, make sure that your working directory is `Matlab`.
 
 
 ## Option 1: A generic script
@@ -147,61 +147,47 @@ At this point, this command line supports data of .fif, .edf, and .dat type.
 You can use a numpy array EEG with ARMBR. Here is a script:
 
 ```
-from ARMBR.ARMBR_Library import *
+from ARMBR.armbr import *
+import matplotlib.pyplot as plt
+
+EEG_blink	= np.array([.....])
+blink_ch_idx = [0,1] # indices of the blink reference channels
+sfreq = 128
+
+
+EEG_clean, optimal_alpha, blink_mask, blink_comp, blink_pattern, blink_projection_matrix = run_armbr(EEG_clink, blink_ch_idx, sfreq, alpha=-1.0)
+
+```
+In this example, `EEG_blink` is the blink contaminated EEG matrix. `blink_ch_idx` is a list of channel indices used as blink reference. `EEG_clean` is the blink-suppressed EEG matrix. 
+
+
+## Option 3: Work with mne `Raw` object
+You can also use ARMBR with mne raw objects, `raw1`. You can apply the blink pattern to the same raw object or even another one. 
+The steps are shown below (and more detailed are availble in the example codes):
+
+```
+from ARMBR import ARMBR
 import mne
 import matplotlib.pyplot as plt
 
-EEG_Blink	= np.array([.....])
-Clean		  = np.array([.....])
-fs = 128
+raw = mne.io.read_raw_fif(r"..\SemiSyntheticData\Sub1\Sub1_Synthetic_Blink_Contaminated_EEG.fif", preload=True)
+raw.filter(l_freq=1, h_freq=40, method='iir', iir_params=dict(order=4, ftype='butter'), verbose=False)
 
+myarmbr = ARMBR(ch_name=['C16','C29'])
+myarmbr.fit(raw)
+myarmbr.apply(raw) # the blink spatial pattern could be applied to another raw object, for example myarmbr.apply(raw2) (assuming that raw2 shared the same montage with raw)
 
-ChannelsName = ['EEG1', EEG2', ...'EEGn']
-
-myARMBR = ARMBR(EEG=EEG_w_Blink,
-                Fs=fs,
-                ChannelsName=ChannelsName,
-                EEGGT=Clean)
-
-myARMBR.ARMBR(blink_chan=['EEG1','EEG2']).PerformanceMetrics().DispMetrics().Plot()
-
-```
-in this script `EEGGT` is the EEG ground truth if you are working with synthetic signals or you know what the signal should look like without blinks.
-When `EEGGT` is available, you can run methods like `PerformanceMetrics()` and `DispMetrics()`. `PerformanceMetrics()` will compute the Pearson correlation, RMSE, and SNR for all channels. `DispMetrics()` will display an average across channels.
-
-
-## Option 3: Work with mne raw object
-You can also use ARMBR with mne raw objects. Below is a script. 
-You can extract the blink spatial pattern from the ARMBR object, `myARMBR`, using `myARMBR.BlinkSpatialPattern`. 
-This pattern can be applied to another EEG dataset. First, create an ARMBR object for the second EEG dataset, denoted `myARMBR2`.
-Now apply the spatial pattern computed from the original EEG signal:
-`myARMBR2.ApplyBlinkSpatialPattern(myARMBR.BlinkSpatialPattern)`
-
-
-
-```
-from ARMBR.ARMBR_Library import *
-import mne
-import matplotlib.pyplot as plt
-
-raw = mne.io.read_raw_fif("..\SemiSyntheticData\Sub1\Sub1_Synthetic_Blink_Contaminated_EEG.fif", preload=True)
-raw.filter(l_freq=1, h_freq=40)
-
-myARMBR = ARMBR()
-myARMBR.ImportFromRaw(raw)
-myARMBR.ARMBR(blink_chan=['C16','C29'])
-myARMBR.UnloadIntoRaw(raw)
+myarmbr.plot_blink_patterns() # To plot the blink spatial pattern
 
 raw.plot()
 plt.show()
-# raw.save("SAVE_PATH.fif")
 
 ```
 With this code you can process the raw data using ARMBR and load it back to the raw object.
 
 
 # ARMBR Result Example
-Below is an example showing the blink contaminated region of a subject 1 before and after running ARMBR:
+Below is an example showing the blink contaminated region of a subject 1 before and after running ARMBR. After training ARMBR, we can use `myarmbr.plot()` to generate the following plot:
 ![BeforeAfterARMBR](https://github.com/S-Shah-Lab/ARMBR/assets/66024269/2b374eb0-47d6-4d6d-84dc-864bae5e35bf)
 
 
