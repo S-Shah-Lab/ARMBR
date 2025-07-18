@@ -11,10 +11,7 @@ offline and real-time (online) settings, including BCI applications.
 
 This module implements the ARMBR algorithm, described in:
   
-> **Alkhoury L**, Scanavini G, Louviot S, Radanovic A, Shah SA & Hill NJ (2025).  
-> *Artifact-Reference Multivariate Backward Regression (ARMBR): A Novel Method  
-> for EEG Blink Artifact Removal with Minimal Data Requirements.*  
-> *Journal of Neural Engineering*, 22(3).  
+> **Alkhoury L**, Scanavini G, Louviot S, Radanovic A, Shah SA & Hill NJ (2025). *Artifact-Reference Multivariate Backward Regression (ARMBR): A Novel Method for EEG Blink Artifact Removal with Minimal Data Requirements.* *Journal of Neural Engineering*, 22(3).  
 > [DOI: 10.1088/1741-2552/ade566](https://doi.org/10.1088/1741-2552/ade566)  
 > [PubMed: 40527334](https://www.ncbi.nlm.nih.gov/pubmed/40527334)
 
