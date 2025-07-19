@@ -1,14 +1,32 @@
-# ARMBR
+# ARMBR: Artifact-reference multivariate backward regression
 Version 2.0.0 
 
-This repository is the original implementation of ARMBR:    
-Artifact-Reference Multivariate Backward Regression (ARMBR) Outperforms Common EEG Blink Artifact Removal Methods
+Artifact-reference multivariate backward regression (ARMBR): a novel method for EEG blink artifact removal with minimal data requirements
 
-by Ludvik Alkhoury, Giacomo Scanavini, Samuel Louviot, Ana Radanovic, Sudhin A. Shah, and N. Jeremy Hill
+ARMBR is a lightweight and easy-to-use method for blink artifact removal from EEG signals using multivariate backward regression. 
+The algorithm detects the times at which eye blinks occur and then estimates their linear scalp projection by regressing a simplified, 
+time-locked reference signal against the multichannel EEG. This projection is used to suppress blink-related components while preserving 
+underlying brain signals. ARMBR requires minimal training data, does not depend on dedicated EOG channels, and operates robustly in both 
+offline and real-time (online) settings, including BCI applications.
+
+This module implements the ARMBR algorithm, described in:
+  
+> **Alkhoury L**, Scanavini G, Louviot S, Radanovic A, Shah SA & Hill NJ (2025). *Artifact-Reference Multivariate Backward Regression (ARMBR): A Novel Method for EEG Blink Artifact Removal with Minimal Data Requirements.* *Journal of Neural Engineering*, 22(3). [DOI: 10.1088/1741-2552/ade566](https://doi.org/10.1088/1741-2552/ade566) [PubMed: 40527334](https://www.ncbi.nlm.nih.gov/pubmed/40527334)
+
+
+
+(see ARMBR.bibtex for the BibTeX entry)
+
+
+The core algorithm supports both standalone and MNE integration via the `ARMBR` class:
+```
+from armbr import run_armbr   # core non-MNE-dependent code (just needs numpy)
+from armbr import ARMBR       # MNE-compatible wrapper class
+```
 
 Below, we provide instructions on how to: 
-1) download the package 
-2) implement the code in Matlab and Python
+1) Download the package 
+2) Implement the code in MATLAB and Python
 
 # Download Package
 
@@ -37,13 +55,13 @@ python -m pip install -e  ./Python
 
 
 
-# Matlab Implementation 
+# MATLAB Implementation 
 
-ARMBR can be used in Python as follows. First, make sure that your working directory is `Matlab`.
+ARMBR can be used in Python as follows. First, make sure that your working directory is `MATLAB`.
 
 
 ## Option 1: A generic script
-Here is how to implement ARMBR using Matlab on the semi-synthetic data used in the paper. 
+Here is how to implement ARMBR using MATLAB on the semi-synthetic data used in the paper. 
 This implementation will work with any EEG array. 
 ```
 clc; clear; close all;
@@ -97,7 +115,7 @@ Sythentic_Blink_Contaminated_EEG = BPF(Sythentic_Blink_Contaminated_EEG, fs, [1 
 Clean_EEG                        = BPF(Clean_EEG, fs, [1 40]);
 
 
-EEG = pop_importdata('dataformat','matlab','nbchan',128,'data', Sythentic_Blink_Contaminated_EEG', 'srate',fs, 'chanlocs','Biosemi128.ced');
+EEG = pop_importdata('dataformat','MATLAB','nbchan',128,'data', Sythentic_Blink_Contaminated_EEG', 'srate',fs, 'chanlocs','Biosemi128.ced');
 eeglab redraw
 
 
@@ -175,7 +193,10 @@ raw.filter(l_freq=1, h_freq=40, method='iir', iir_params=dict(order=4, ftype='bu
 
 myarmbr = ARMBR(ch_name=['C16','C29'])
 myarmbr.fit(raw)
-myarmbr.apply(raw) # the blink spatial pattern could be applied to another raw object, for example myarmbr.apply(raw2) (assuming that raw2 shared the same montage with raw)
+myarmbr.apply(raw)
+
+# Note that the blink spatial pattern could be applied to another raw object.
+# For example myarmbr.apply(raw2); assuming both raw2 and raw have the same montage.
 
 myarmbr.plot_blink_patterns() # To plot the blink spatial pattern
 
