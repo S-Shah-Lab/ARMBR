@@ -637,8 +637,15 @@ def run_armbr(X, blink_ch_idx, sfreq, alpha=-1.0):
 	described in Alkhoury et al. (2025). The returned `blink_projection_matrix`
 	can be applied to other EEG data for online or batch blink suppression.
 	"""
+	
+	try:
+		import mne.utils, mne.filter
+		USE_MNE = True
+	except ImportError:
+		import scipy.signal
+		USE_MNE = False
+	
 
-	import mne.utils, mne.filter
 	
 	X = _rotate_arr(X)
 	good_eeg, _, good_blinks = _data_prep(X, sfreq, blink_ch_idx)
@@ -646,22 +653,37 @@ def run_armbr(X, blink_ch_idx, sfreq, alpha=-1.0):
 	if alpha == -1:
 		alpha_range = np.arange(0.01, 10, 0.1)
 		energy_ratios = []
+		
+		iterator = mne.utils.ProgressBar(alpha_range, mesg='Running ARMBR') if USE_MNE else alpha_range
+			
 
-		with mne.utils.ProgressBar(alpha_range, mesg='Running ARMBR') as pb:
-			for test_alpha in pb:
-				x_tmp, blink_tmp, _, _, _ = _blink_selection(X, good_eeg, good_blinks, test_alpha)
+		for test_alpha in iterator:
+			x_tmp, blink_tmp, _, _, _ = _blink_selection(X, good_eeg, good_blinks, test_alpha)
 
-				if blink_tmp.size > 0 and not np.isnan(np.sum(blink_tmp)):
-
-					blink_filt = mne.filter.filter_data(blink_tmp.T, sfreq=sfreq, l_freq=1, h_freq=8, method='iir', iir_params=dict(order=4, ftype='butter'), verbose=False).T				
-					#import scipy.signal
-					#bpf = scipy.signal.firwin(10, [1, 8], pass_zero=False, fs=sfreq)
+			if blink_tmp.size > 0 and not np.isnan(np.sum(blink_tmp)):
+				if USE_MNE:
+					blink_filt = mne.filter.filter_data(
+						blink_tmp.T, sfreq=sfreq, l_freq=1, h_freq=8,
+						method='iir', iir_params=dict(order=4, ftype='butter'),
+						verbose=False
+					).T
+				else:
+					# Use FIR filter with scipy if MNE is unavailable
+					#bpf = scipy.signal.firwin(101, [1, 8], pass_zero=False, fs=sfreq)
 					#blink_filt = scipy.signal.filtfilt(bpf, 1, blink_tmp.T).T
 					
-					ratio = np.sum(blink_filt ** 2) / np.sum((blink_tmp - blink_filt) ** 2)
-					energy_ratios.append(ratio)
-				else:
-					break
+					sos1 = signal.butter(N=4, Wn=[40], btype='lowpass', fs=sfreq, output='sos')
+					sos2 = signal.butter(N=4, Wn=[1], btype='highpass', fs=sfreq, output='sos')
+
+					filt_blink_tmp = signal.sosfiltfilt(sos1, blink_tmp.T)
+					blink_filt = signal.sosfiltfilt(sos2, filt_blink_tmp).T
+			
+	
+
+				ratio = np.sum(blink_filt ** 2) / np.sum((blink_tmp - blink_filt) ** 2)
+				energy_ratios.append(ratio)
+			else:
+				break
 
 		energy_ratios = np.array(energy_ratios)
 		alpha_range = alpha_range[:len(energy_ratios)]
