@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import mne
 from mne.datasets import sample
-from armbr import ARMBR # or from ARMBR import ARMBR ; if you installed the ARMBR package
+from ARMBR import ARMBR # or from ARMBR import ARMBR ; if you installed the ARMBR package
 
 
 def _load_mne_raw(with_annotation=True):

@@ -19,13 +19,13 @@ HERE = os.path.realpath( os.path.dirname( __file__ ) )
 
 setup_args = dict(name='ARMBR',
 package_dir={ '' : package_dir },
-      version='1.0.0', # @VERSION_INFO@
+      version='2.0.0', # @VERSION_INFO@
       description='Python implementation of the ARMBR blink removal method',
       url='https://github.com/S-Shah-Lab/ARMBR.git',
       author='Ludvik Alkhoury',
       author_email='Ludvik.Alkhoury@gmail.com',
       packages=['ARMBR'],
-      install_requires=['scipy', 'numpy', 'mne', 'tqdm'])
+      install_requires=['scipy', 'numpy'])
       
       
 if __name__ == '__main__' and getattr( sys, 'argv', [] )[ 1: ]:
