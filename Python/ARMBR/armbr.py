@@ -272,7 +272,7 @@ class ARMBR:
 		mne.utils._check_preload(raw, 'apply')
 	
 		eeg_raw		= _rotate_arr( raw.get_data(picks=picks) )
-		eeg_clean	= eeg_raw.dot(self.blink_projection_matrix)
+		eeg_clean	= eeg_raw.dot(self.blink_removal_matrix)
 		
 		# Apply cleaned data back to Raw object
 		raw.apply_function(lambda x: eeg_clean.T, picks=picks, channel_wise=False)
@@ -559,7 +559,7 @@ class ARMBR:
 		- `blink_mask`: binary vector marking blink segments
 		- `blink_comp`: blink time course (latent variable)
 		- `blink_spatial_pattern`: scalp patterns
-		- `blink_projection_matrix`: projection operator for cleaning
+		- `blink_removal_matrix`: projection operator for cleaning
 		"""
 
 		# Resolve channel names or indices
@@ -572,7 +572,7 @@ class ARMBR:
 
 		if len(self.ch_name_inx) > 0:
 			# Apply ARMBR
-			x_purged, best_alpha, blink_mask, blink_comp, blink_spatial_pattern, blink_projection_matrix = run_armbr(
+			x_purged, best_alpha, blink_mask, blink_comp, blink_spatial_pattern, blink_removal_matrix = run_armbr(
 				self._eeg_data, self.ch_name_inx, self.sfreq, alpha
 			)
 
@@ -582,7 +582,7 @@ class ARMBR:
 			self.blink_mask = blink_mask
 			self.blink_comp = blink_comp
 			self.blink_spatial_pattern = blink_spatial_pattern
-			self.blink_projection_matrix = blink_projection_matrix
+			self.blink_removal_matrix = blink_removal_matrix
 
 		else:
 			raise RuntimeError("No blink channels were identified. ARMBR was not performed.")
@@ -627,14 +627,14 @@ def run_armbr(X, blink_ch_idx, sfreq, alpha=-1.0):
 		Time course of the extracted blink component.
 	blink_pattern : ndarray, shape (n_channels,)
 		Estimated spatial topography of the blink.
-	blink_projection_matrix : ndarray, shape (n_channels, n_channels)
+	blink_removal_matrix : ndarray, shape (n_channels, n_channels)
 		Spatial projection matrix used to remove blink activity.
 
 	Notes
 	-----
 	When `alpha=-1`, the algorithm sweeps a range of values to maximize the
 	low-frequency to high-frequency energy ratio of the blink component, as
-	described in Alkhoury et al. (2025). The returned `blink_projection_matrix`
+	described in Alkhoury et al. (2025). The returned `blink_removal_matrix`
 	can be applied to other EEG data for online or batch blink suppression.
 	"""
 	
@@ -690,7 +690,7 @@ def run_armbr(X, blink_ch_idx, sfreq, alpha=-1.0):
 
 		if energy_ratios.size > 0:
 			best_alpha = alpha_range[np.argmax(energy_ratios)]
-			x_clean, blink_comp, ref_mask, blink_pattern, blink_projection_matrix = _blink_selection(X, good_eeg, good_blinks, best_alpha)
+			x_clean, blink_comp, ref_mask, blink_pattern, blink_removal_matrix = _blink_selection(X, good_eeg, good_blinks, best_alpha)
 		else:
 			x_clean = X
 			blink_comp = np.array([])
@@ -699,10 +699,10 @@ def run_armbr(X, blink_ch_idx, sfreq, alpha=-1.0):
 			best_alpha = None
 
 	else:
-		x_clean, blink_comp, ref_mask, blink_pattern, blink_projection_matrix = _blink_selection(X, good_eeg, good_blinks, alpha)
+		x_clean, blink_comp, ref_mask, blink_pattern, blink_removal_matrix = _blink_selection(X, good_eeg, good_blinks, alpha)
 		best_alpha = alpha
 
-	return x_clean, best_alpha, ref_mask, blink_comp, blink_pattern, blink_projection_matrix
+	return x_clean, best_alpha, ref_mask, blink_comp, blink_pattern, blink_removal_matrix
 
 	
 # ============================================================
@@ -1053,7 +1053,7 @@ def _blink_selection(eeg_orig, eeg_filt, blink_filt, alpha, mask_in=None):
 		Binary mask marking blink time points.
 	blink_pattern : ndarray
 		Spatial blink topography.
-	blink_projection_matrix : ndarray
+	blink_removal_matrix : ndarray
 		Projection matrix used to remove blink activity.
 
 	Notes
@@ -1081,14 +1081,15 @@ def _blink_selection(eeg_orig, eeg_filt, blink_filt, alpha, mask_in=None):
 
 	# Project out blink if ref_mask contains any positive sample
 	if np.sum(ref_mask) != 0:
-		blink_projection_matrix, _, blink_pattern, _, blink_artifact, eeg_clean = _projectout(
+		blink_removal_matrix, _, blink_pattern, _, blink_artifact, eeg_clean = _projectout(
 			eeg_orig, reduced_eeg, ref_mask, mask_in
 		)
 	else:
 		eeg_clean = np.array([])
 		blink_artifact = np.array([])
 		blink_pattern = np.array([])
+		blink_removal_matrix = np.array([])
 
-	return eeg_clean, blink_artifact, ref_mask, blink_pattern, blink_projection_matrix
+	return eeg_clean, blink_artifact, ref_mask, blink_pattern, blink_removal_matrix
 
 

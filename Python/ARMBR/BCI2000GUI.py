@@ -11,7 +11,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 from ARMBR import run_armbr
 
-def wrap_text(text, width=20):
+def wrap_text(text, width=70):
 	return '\n'.join(text[i:i+width] for i in range(0, len(text), width))
 
 
@@ -31,6 +31,8 @@ class BCI2000GUI(tk.Tk):
 		
 		self.bci2000root = os.path.abspath( os.path.expanduser( bci2000root ) )
 		self.default_params_path = os.path.join(self.bci2000root, "parms")
+		self.default_param_name = "ARMBR_BlinkRemovalMatrix.prm"
+		
 		# @@@  We assume that the BCI2000Tools package is
 		#      version-controlled or released as part of the
 		#      BCI2000 distro. Therefore, before anything can
@@ -85,46 +87,13 @@ class BCI2000GUI(tk.Tk):
 		self.check_channels_button = tk.Button(self, text="Show Channels", command=self.show_available_channels)
 		self.check_channels_button.grid(row=2, column=2, padx=0, pady=5, sticky="w")
 
-
-
-		# --------------------LINE 4----------------
-		#self.params_dir = tk.Label(self, text="Parameter Save Directory:")
-		#self.params_dir.grid(row=3, column=0, padx=5, pady=5)
-		
-
-		# Entry field for data path
-		#self.params_path_var = tk.StringVar(value=default_params_path)
-		#self.params_path_entry = tk.Entry(self, textvariable=self.params_path_var, width=30)
-		#self.params_path_entry.grid(row=3, column=1, padx=5, pady=5)
-		
-		# Button to open file explorer to select a directory
-		#self.set_params_path_button = tk.Button(self, text="Browse", command=self.select_params_path)
-		#self.set_params_path_button.grid(row=3, column=2, padx=10, pady=5)
-		
-		
-		# --------------------LINE 5----------------
-		#self.params_name = tk.Label(self, text="Parameter Name:")
-		#self.params_name.grid(row=4, column=0, padx=5, pady=5)
-		
-		self.default_param_name = "ARMBR_BlinkRemovalMatrix.prm"
-
-		
-		# Entry field for data path
-		#self.params_var = tk.StringVar(value=default_param_name)
-		#self.params_entry = tk.Entry(self, textvariable=self.params_var, width=30)
-		#self.params_entry.grid(row=4, column=1, padx=5, pady=5)
-		
-		#self.set_params_name_button = tk.Button(self, text="Set .prm Name", command=self.set_params_name)
-		#self.set_params_name_button.grid(row=4, column=2, padx=5, pady=10)
-		
-		
 		# --------------------LINE 6----------------
 		self.run_ARMBR_button = tk.Button(self, text="Run ARMBR", command=self.run_armbr_)
 		self.run_ARMBR_button.grid(row=5, column=1, padx=0, pady=10)
 		
 		# --------------------LINE 7----------------
-		self.message_display = tk.Label(self, text=" ", width=20)
-		self.message_display.grid(row=5, column=0, padx=0, pady=5)
+		self.message_display = tk.Label(self, text=" ", width=40)
+		self.message_display.grid(row=6, column=0, columnspan=3, padx=5, pady=5, sticky="we")
 		
 
 
@@ -235,7 +204,6 @@ class BCI2000GUI(tk.Tk):
 		
 		_, _, _, _, _, blink_removal_matrix = run_armbr(self.eeg, self.blink_chan_ix, int(self.fs), -1)
 
-
 		self.message_display.config(text='ARMBR done. Weights not saved.', fg="red")
 		self.message_display.update()  # Force update
 
@@ -261,7 +229,7 @@ class BCI2000GUI(tk.Tk):
 		with open(os.path.join(self.default_params_path, self.default_param_name), "a") as f:
 			f.write(transmit_line + "\n")
 
-		weights_saved_at = 'Weights save at: '+ self.default_params_path + '/' + self.default_param_name
+		weights_saved_at = 'Weights save at:\n '+ self.default_params_path + '/' + self.default_param_name
 		
 		wrapped_text = wrap_text(weights_saved_at)
 		self.message_display.config(text=wrapped_text, fg="red")
