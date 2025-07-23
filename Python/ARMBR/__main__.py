@@ -10,6 +10,8 @@ python -m ARMBR -p "..\SemiSyntheticData\Sub1\Sub1_Synthetic_Blink_Contaminated_
 If you want to use the name of the blink reference channels then use below, where -c "C16,C29" represents channel name C16 and C29:
 python -m ARMBR -p "..\SemiSyntheticData\Sub1\Sub1_Synthetic_Blink_Contaminated_EEG.fif" -c "C16,C29" --plot
 
+python -m ARMBR requires the mne package.
+The ARMBR module alone needs either mne or scipy.
 
 Code by Ludvik Alkhoury, Giacomo Scanavini, and Jeremy hill
 June 25, 2024
@@ -18,6 +20,7 @@ June 25, 2024
 import argparse
 import warnings
 import os
+import sys
 
 
 parser1 = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter, prog='python -m ARMBR')
@@ -28,14 +31,25 @@ parser1.add_argument( '-f', '--filter-band', metavar='l_freq_hz, h_freq_hz', def
 parser1.add_argument( "--save", action = 'store_true', help='Use to save the EEG data after blink removal as a .fif mne raw object.')
 parser1.add_argument( "--save-path", default='', type=str, help='Directory where data is saved.')
 parser1.add_argument( "--plot", action = 'store_true', help='Use to plot the cleaned EEG signals.')
+parser1.add_argument( "--version", action = 'store_true', help='Print the package version.')
+parser1.add_argument( "--BCI2000", default='', type=str, help='Go into BCI2000-support GUI mode, targeting the specified BCI2000 distribution root dir.')
 
 OPTS1 = parser1.parse_args()
 
+
+from ARMBR import ARMBR, __version__
+
+if OPTS1.version:
+	print( 'ARMBR %s' % __version__ )
+	sys.exit( 0 )
+
+if OPTS1.BCI2000:
+	from ARMBR.BCI2000GUI import RunGUI
+	sys.exit( RunGUI( bci2000root=OPTS1.BCI2000 ) )
+
+
 import numpy as np
 import mne 
-
-from ARMBR import ARMBR
-
 
 filter_band		= [float(f) for f in OPTS1.filter_band.replace(' ','').split(',')]
 blink_channels	= [f for f in OPTS1.blink_channels.replace(' ','').split(',')]
