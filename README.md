@@ -56,7 +56,8 @@ python -m pip install -e  ./Python
 4) The semi-synthetic data used in the ARMBR paper, along with example codes that allow testing ARMBR of the semi-synthetic data used in the paper, are available here in OSF at:
 ```
 https://osf.io/th2g6/
-``` 
+```
+Download folder `SemiSyntheticData` and add it to the main ARMBR directory.
 
 # MATLAB Implementation 
 
