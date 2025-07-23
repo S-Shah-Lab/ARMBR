@@ -38,8 +38,8 @@ Alkhoury L, Scanavini G, Louviot S, Radanovic A, Shah SA & Hill NJ (2025). *Arti
 
 ```bibtex
 @article{alkhoury2025armbr,
-    author  = {Alkhoury, Ludvik and Scanavini, Giacomo and Louviot, Samuel and Radanovic, Ana and Shah, Sudhin A and Hill, NJ},
-    title   = {Artifact-reference multivariate backward regression ({ARMBR}): A novel method for {EEG} blink artifact removal with minimal data requirements},
+    author  = {Alkhoury, Ludvik and Scanavini, Giacomo and Louviot, Samuel and Radanovic, Ana and Shah, Sudhin A and Hill, N Jeremy},
+    title   = {Artifact-Reference Multivariate Backward Regression ({ARMBR}): A Novel Method for {EEG} Blink Artifact Removal with Minimal Data Requirements},
     journal = {Journal of Neural Engineering},
     volume  = {22},
     number  = {3},
