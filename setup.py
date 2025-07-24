@@ -28,6 +28,9 @@ The code is maintained at:
 https://github.com/S-Shah-Lab/ARMBR
 
 
+The semi-synthetic data used in the ARMBR paper, along with example codes that allow testing ARMBR of the semi-synthetic data used in the paper, are available on OSF at: https://osf.io/th2g6/
+
+
 If you use ARMBR in your work, please cite:
 
 **Citation**:
