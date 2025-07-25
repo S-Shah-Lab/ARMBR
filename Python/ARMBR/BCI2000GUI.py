@@ -48,31 +48,18 @@ class BCI2000GUI(tk.Tk):
 		self.geometry("500x220")
 		
 		# --------------------LINE 1----------------
-		# Label for .dat Directory
-		
-		self.data_path_label = tk.Label(self, text="Select `.dat` Directory:")
+		# Label for .dat File selection
+		self.data_path_label = tk.Label(self, text="Select `.dat` File:")
 		self.data_path_label.grid(row=0, column=0, padx=(0, 5), pady=5, sticky="e")
 
-		# Entry field for data path
-		self.data_path_var = tk.StringVar()
-		self.data_path_entry = tk.Entry(self, textvariable=self.data_path_var, width=30)
-		self.data_path_entry.grid(row=0, column=1, padx=0, pady=5, sticky="w")
-		
-		# Button to open file explorer to select a directory
-		self.browse_button = tk.Button(self, text="Browse", command=self.select_data_path)
-		self.browse_button.grid(row=0, column=2, padx=0, pady=5)
-		
+		# Button to browse for a .dat file
+		self.browse_button = tk.Button(self, text="Browse", command=self.select_dat_file)
+		self.browse_button.grid(row=0, column=1, pady=5, sticky="w")
 
-		# --------------------LINE 2----------------
-		# Label for .dat Files
-		self.data_file_label = tk.Label(self, text="Select `.dat` File:")
-		self.data_file_label.grid(row=1, column=0, sticky="e", padx=(0, 5), pady=5)
+		# Label to show the selected .dat file name
+		self.selected_file_label = tk.Label(self, text="No file selected", anchor="center", fg='blue', width=60)
+		self.selected_file_label.grid(row=1, column=0, columnspan=3, padx=25, pady=5, sticky="w")
 
-		# Dropdown for selecting .dat file
-		self.data_file_var = tk.StringVar()
-		self.data_file_menu = tk.OptionMenu(self, self.data_file_var, "")
-		self.data_file_menu.config(width=30)  # Adjust width as needed
-		self.data_file_menu.grid(row=1, column=1, columnspan=1, sticky="w", pady=5)
 		
 
 		# --------------------LINE 3----------------
@@ -92,20 +79,65 @@ class BCI2000GUI(tk.Tk):
 		self.run_ARMBR_button.grid(row=5, column=1, padx=0, pady=10)
 		
 		# --------------------LINE 7----------------
-		self.message_display = tk.Label(self, text=" ", width=40)
-		self.message_display.grid(row=6, column=0, columnspan=3, padx=5, pady=5, sticky="we")
+		#self.message_display = tk.Text(self, height=4, width=60, wrap="word", bg=self.cget("bg"), borderwidth=0)
+		#self.message_display.grid(row=6, column=0, columnspan=3, padx=5, pady=5, sticky="we")
+		#self.message_display.config(state="disabled")
+		# Create a frame to hold both the Text widget and the Scrollbar
+		message_frame = tk.Frame(self)
+		message_frame.grid(row=6, column=0, columnspan=3, padx=5, pady=5, sticky="nsew")
+
+		# Create the Text widget
+		self.message_display = tk.Text(
+			message_frame, height=4, width=60, wrap="word",
+			bg=self.cget("bg"), borderwidth=0
+		)
+		self.message_display.pack(side="left", fill="both", expand=True)
+
+		# Add a vertical Scrollbar
+		scrollbar = tk.Scrollbar(message_frame, command=self.message_display.yview)
+		scrollbar.pack(side="right", fill="y")
+
+		# Link the Text widget to the scrollbar
+		self.message_display.config(yscrollcommand=scrollbar.set)
+		self.message_display.config(state="disabled")
+
+	
+	def update_message(self, text, color="red", state="normal", do_wrap=True):  
+		self.message_display.config(state=state)
+		self.message_display.delete("1.0", tk.END)
 		
+		if do_wrap:
+			text = wrap_text(text)
+		
+		self.message_display.insert(tk.END, text)
+		
+		self.message_display.tag_add("color", "1.0", tk.END)
+		self.message_display.tag_config("color", foreground=color)
+		
+		self.message_display.tag_config("center", justify="center")
+		self.message_display.tag_add("center", "1.0", tk.END)
+	
+		self.message_display.config(state="disabled")
 
 
-		
+	def select_dat_file(self):
+		file_path = filedialog.askopenfilename(
+			filetypes=[("DAT files", "*.dat")],
+			initialdir=self.bci2000root
+		)
+		if file_path:
+			self.data_file_path = file_path  # Store full path internally
+			self.data_file_name = os.path.basename(file_path)
+			self.selected_file_label.config(text=wrap_text('Selected file: '+self.data_file_name))
+
+
 	def show_available_channels(self):
 		# === LOAD DATA ===
-		self.DatFileDir = self.data_path_entry.get() + '/' + self.data_file_var.get()
 		
-		self.message_display.config(text='Loading: ' + wrap_text(self.data_file_var.get()), fg="red")
+		self.update_message(text='Loading: ' + wrap_text(self.data_file_name))
 
 		from BCI2000Tools.FileReader import bcistream # see @@@
-		b = bcistream(self.DatFileDir)
+		b = bcistream(self.data_file_path)
 		eeg, States = b.decode()
 		eeg = np.array(eeg)
 		FsOrig = b.samplingrate()
@@ -142,6 +174,26 @@ class BCI2000GUI(tk.Tk):
 
 		canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
 		canvas.configure(yscrollcommand=scrollbar.set)
+		
+				# Enable mousewheel scrolling
+		def _on_mousewheel(event):
+			canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+		def _on_linux_scroll(event):
+			if event.num == 4:
+				canvas.yview_scroll(-1, "units")
+			elif event.num == 5:
+				canvas.yview_scroll(1, "units")
+
+		# Optional: Only scroll when mouse is over the canvas
+		canvas.bind("<Enter>", lambda e: canvas.bind("<MouseWheel>", _on_mousewheel))
+		canvas.bind("<Leave>", lambda e: canvas.unbind("<MouseWheel>"))
+		
+		# Bind Linux scroll buttons (always active)
+		canvas.bind_all("<Button-4>", _on_linux_scroll)
+		canvas.bind_all("<Button-5>", _on_linux_scroll)
+
+
 
 		canvas.grid(row=0, column=0, columnspan=2)
 		scrollbar.grid(row=0, column=2, sticky="ns")
@@ -169,11 +221,10 @@ class BCI2000GUI(tk.Tk):
 		
 		# === LOAD DATA ===
 		if not hasattr(self, 'eeg'):
-			self.DatFileDir = self.data_path_entry.get() + '/' + self.data_file_var.get()
-			self.message_display.config(text='Loading: ' + wrap_text(self.data_file_var.get()), fg="red")
+			self.update_message(text='Loading: ' + self.data_file_name)
 			
 			from BCI2000Tools.FileReader import bcistream # see @@@
-			b = bcistream(self.DatFileDir)
+			b = bcistream(self.data_file_path)
 			eeg, States = b.decode()
 			eeg = np.array(eeg)
 			FsOrig = b.samplingrate()
@@ -199,12 +250,12 @@ class BCI2000GUI(tk.Tk):
 		self.blink_chan_ix = [self.channel_names.index(blk_chn) for blk_chn in self.blink_chan]
 
 		# Create ARMBR object (using filtered EEG)
-		self.message_display.config(text=wrap_text('Running ARMBR. This can take a while...'), fg="red")
+		self.update_message(text='Running ARMBR. This can take a while...')
 		self.message_display.update()  # Force update
 		
 		_, _, _, _, _, blink_removal_matrix = run_armbr(self.eeg, self.blink_chan_ix, int(self.fs), -1)
 
-		self.message_display.config(text='ARMBR done. Weights not saved.', fg="red")
+		self.update_message(text='ARMBR done. Weights not saved.')
 		self.message_display.update()  # Force update
 
 		from BCI2000Tools.Electrodes import ChannelSet # see @@@
@@ -229,10 +280,11 @@ class BCI2000GUI(tk.Tk):
 		with open(os.path.join(self.default_params_path, self.default_param_name), "a") as f:
 			f.write(transmit_line + "\n")
 
-		weights_saved_at = 'Weights save at:\n '+ self.default_params_path + '/' + self.default_param_name
+		weights_saved_at = 'Weights saved at: '+ self.default_params_path + '\\' + self.default_param_name      
 		
-		wrapped_text = wrap_text(weights_saved_at)
-		self.message_display.config(text=wrapped_text, fg="red")
+		self.update_message(text=weights_saved_at, do_wrap=False)
+
+
 		
 		return self
 		
@@ -243,7 +295,7 @@ class BCI2000GUI(tk.Tk):
 		info_window.geometry("600x300")
 
 		text_to_display = (
-				f"Loading file: {self.DatFileDir}\n"
+				f"Loading file: {self.data_file_path}\n"
 				f"Blink channels: {self.blink_chan}\n"
 				f"Saving parameter file: {self.params_path_var.get()}/{self.params_name}\n\n"
 				"Would you like to continue?"
@@ -282,7 +334,7 @@ class BCI2000GUI(tk.Tk):
 			self.params_name = self.params_name + '.prm'
 			
 		# Update the text later
-		self.message_display.config(text='Parameter name: ' + str(self.params_name), fg="red")
+		self.update_message(text='Parameter name: ' + str(self.params_name))
 
 
 	def load_blink_channels(self):
@@ -290,7 +342,7 @@ class BCI2000GUI(tk.Tk):
 		
 		self.blink_chan_ix = [self.channel_names.index(blk_chn) for blk_chn in self.blink_chan]
 		
-		self.message_display.config(text='Blink channels: ' + str(self.blink_chan), fg="red")
+		self.update_message(text='Blink channels: ' + str(self.blink_chan))
 		
 		
 	def select_data_path(self):
@@ -326,7 +378,7 @@ class BCI2000GUI(tk.Tk):
 			self.data_file_var.set("")
 			self.data_file_menu["menu"].delete(0, "end")
 
-def RunGUI( bci2000root ):	
+def RunGUI( bci2000root='.' ):	
 	app = BCI2000GUI( bci2000root=bci2000root )
 	app.mainloop()
 
