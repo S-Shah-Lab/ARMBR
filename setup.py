@@ -23,6 +23,7 @@ This is the Python implementation of Artifact-reference multivariate backward re
 
 ARMBR is a lightweight and easy-to-use method for blink artifact removal from EEG signals using multivariate backward regression. The algorithm detects the times at which eye blinks occur and then estimates their linear scalp projection by regressing a simplified, time-locked reference signal against the multichannel EEG. This projection is used to suppress blink-related components while preserving underlying brain signals. ARMBR requires minimal training data, does not depend on dedicated EOG channels, and operates robustly in both offline and real-time (online) settings, including BCI applications.
 
+This release contains some improvements to the BCI2000 GUI.
 
 The code is maintained at:	
 https://github.com/S-Shah-Lab/ARMBR
