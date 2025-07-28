@@ -70,10 +70,11 @@ if len(OPTS1.data_path) > 0:
 			
 			from BCI2kReader import BCI2kReader as b2k
 			
-			reader = b2k.BCI2kReader(OPTS1.data_path)
-			eeg_data = reader.signals
-			sampling_rate = reader.samplingrate
-			ch_names = ['EEG' + str(i+1) for i in range(eeg_data.shape[0])]  # Example channel names
+			reader			= b2k.BCI2kReader(OPTS1.data_path)
+			eeg_data		= reader.signals
+			sampling_rate	= reader.samplingrate
+			ch_names 		= reader.parameters['ChannelNames']
+			
 			info = mne.create_info(ch_names=ch_names, sfreq=sampling_rate, ch_types='eeg')
 			raw = mne.io.RawArray(eeg_data*1e-6, info)
 			
