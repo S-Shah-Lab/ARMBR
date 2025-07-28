@@ -33,7 +33,7 @@ import copy
 
 import numpy as np
 
-try: import mne
+try: import mne # TODO: we could consider removing the method decorators below. Then we would not need to import mne before runtime---the package could at then least be imported (e.g. for purposes like python -m ARMBR --help/--version) without the delay of importing mne's heavy machinery 
 except:
 	VERBOSE = lambda x: x
 	class LOGGER:
@@ -42,7 +42,7 @@ else:
 	import mne.utils; from mne.utils import verbose as VERBOSE, logger as LOGGER
 	import mne.filter
 
-__version__ = '2.0.7'  # @VERSION_INFO@
+__version__ = '2.0.8'  # @VERSION_INFO@
 
 
 class ARMBR:
@@ -73,14 +73,14 @@ class ARMBR:
 	
 	bibtex = """
 		@article{alkhoury2025_armbr,
-			title={Artifact-reference multivariate backward regression (ARMBR): a novel method for EEG blink artifact removal with minimal data requirements},
-			author={Alkhoury, Ludvik and Scanavini, G and Louviot, S and Radanovic, A and Shah, SA and Hill, NJ},
+			title={Artifact-Reference Multivariate Backward Regression (ARMBR): A Novel Method for EEG Blink Artifact Removal with Minimal Data Requirements},
+			author={Alkhoury, L and Scanavini, G and Louviot, S and Radanovic, A and Shah, SA and Hill, NJ},
 			journal={Journal of Neural Engineering},
 			volume={22},
 			number={3},
 			pages={036048},
 			year={2025},
-			doi={10.1088/1741-2552/ade566}
+			doi={10.1088/1741-2552/ade566},
 		}
 	"""
 	
@@ -389,6 +389,8 @@ class ARMBR:
 		symmetrically based on the maximum absolute pattern value.
 		"""
 
+
+		import mne.viz
 		import matplotlib.pyplot as plt
 		from mpl_toolkits.axes_grid1 import make_axes_locatable
 
@@ -642,7 +644,7 @@ def run_armbr(X, blink_ch_idx, sfreq, alpha=-1.0):
 		import mne.utils, mne.filter
 		USE_MNE = True
 	except ImportError:
-		import scipy.signal as signal
+		import scipy.signal
 		USE_MNE = False
 	
 
@@ -672,11 +674,11 @@ def run_armbr(X, blink_ch_idx, sfreq, alpha=-1.0):
 					#bpf = scipy.signal.firwin(101, [1, 8], pass_zero=False, fs=sfreq)
 					#blink_filt = scipy.signal.filtfilt(bpf, 1, blink_tmp.T).T
 					
-					sos1 = signal.butter(N=4, Wn=[40], btype='lowpass', fs=sfreq, output='sos')
-					sos2 = signal.butter(N=4, Wn=[1], btype='highpass', fs=sfreq, output='sos')
+					sos1 = scipy.signal.butter(N=4, Wn=[8], btype='lowpass',  fs=sfreq, output='sos')
+					sos2 = scipy.signal.butter(N=4, Wn=[1], btype='highpass', fs=sfreq, output='sos')
 
-					filt_blink_tmp = signal.sosfiltfilt(sos1, blink_tmp.T)
-					blink_filt = signal.sosfiltfilt(sos2, filt_blink_tmp).T
+					filt_blink_tmp = scipy.signal.sosfiltfilt(sos1, blink_tmp.T)
+					blink_filt = scipy.signal.sosfiltfilt(sos2, filt_blink_tmp).T
 			
 	
 
