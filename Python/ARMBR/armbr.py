@@ -642,7 +642,7 @@ def run_armbr(X, blink_ch_idx, sfreq, alpha=-1.0):
 		import mne.utils, mne.filter
 		USE_MNE = True
 	except ImportError:
-		import scipy.signal
+		import scipy.signal as signal
 		USE_MNE = False
 	
 
