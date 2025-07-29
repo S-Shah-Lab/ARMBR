@@ -114,6 +114,7 @@ class ARMBR:
 	@VERBOSE
 	def fit(	self, 
 				raw, 
+				exclude	=	None,
 				picks	=	"eeg", 
 				start	=	None, 
 				stop	=	None, 
@@ -132,6 +133,10 @@ class ARMBR:
 		----------
 		raw : instance of mne.io.BaseRaw
 			Continuous raw EEG recording.
+		exclude : str | list | slice | None
+			Channels to exclude from training. These channels will not be used
+			for computing the ARMBR spatial projection but will still be present
+			in the fitted instance and output data.
 		picks : str | list | slice | None
 			Channels to include. Defaults to 'eeg'. Can be a string like 'eeg',
 			a list of channel names, or indices.
@@ -217,8 +222,9 @@ class ARMBR:
 		self._channel_indices	= [i for i, ch_type  in enumerate(raw.get_channel_types()) if ch_type == 'eeg']
 		self._eeg_indices		= [raw.ch_names.index(ch) for ch in raw.copy().pick('eeg').ch_names]
 		self._raw_info			= raw.info
+		self.ch_exclude			= exclude
 		
-		self._run_armbr(self.ch_name)
+		self._run_armbr(self.ch_name, self.ch_exclude)
 		self.is_fitted = True  
 		
 		LOGGER.info("ARMBR model fitting complete.")
@@ -474,18 +480,21 @@ class ARMBR:
 
 
 
-	def _prep_blink_channels(self, blink_chs):
+	def _prep_channels(self, blink_chs, exclude_chs=None):
 		"""
-		Standardize user-specified blink channels to internal index format.
+		Standardize user-specified blink and exclude channels to internal index format.
 
-		This method resolves the `blink_chs` argument passed to ARMBR into
-		canonical numeric indices based on `self.ch_names`. Accepts either
-		a list of integers (indices) or a list of strings (channel names).
+		This method resolves the `blink_chs` and optionally `exclude_chs` arguments 
+		passed to ARMBR into canonical numeric indices based on `self.ch_names`. 
+		Accepts either a list of integers (indices) or a list of strings (channel names).
 
 		Parameters
 		----------
 		blink_chs : list of str | list of int
 			Blink-affected EEG channels. Can be specified by name or index.
+		exclude_chs : list of str | list of int | None
+			Channels to exclude from training. Can be specified by name or index.
+			If None, no channels are excluded.
 
 		Raises
 		------
@@ -494,10 +503,12 @@ class ARMBR:
 
 		Notes
 		-----
-		This method sets `self.ch_name` and `self.ch_name_inx` attributes
-		based on the resolved input.
+		This method sets the following attributes:
+		- `self.ch_name`, `self.ch_name_inx` for blink channels
+		- `self.exclude_ch_name`, `self.exclude_ch_inx` for excluded channels
 		"""
 
+		# === Handle Blink Channels (unchanged logic) ===
 		is_all_int = all(isinstance(ch, int) or (isinstance(ch, str) and ch.isdigit()) for ch in blink_chs)
 		is_all_str = all(isinstance(ch, str) for ch in blink_chs)
 
@@ -506,7 +517,7 @@ class ARMBR:
 			LOGGER.info("Blink channels (indices): {}".format(self.ch_name_inx))
 
 		elif is_all_str:
-			self.ch_name = blink_chs  # Save user-specified names
+			self.ch_name = blink_chs
 			lower_all_ch_names = [name.lower() for name in self.ch_names]
 
 			ch_indices = []
@@ -525,11 +536,40 @@ class ARMBR:
 		else:
 			raise ValueError("Blink channel list must contain only channel names or only indices.")
 
+		# === Handle Exclude Channels (new part) ===
+		if exclude_chs is not None:
+			ex_is_all_int = all(isinstance(ch, int) or (isinstance(ch, str) and ch.isdigit()) for ch in exclude_chs)
+			ex_is_all_str = all(isinstance(ch, str) for ch in exclude_chs)
+
+			if ex_is_all_int:
+				self.exclude_ch_inx = [int(ch) for ch in exclude_chs]
+				self.exclude_ch_name = [self.ch_names[i] for i in self.exclude_ch_inx]
+				LOGGER.info("Exclude channels (indices): {}".format(self.exclude_ch_inx))
+
+			elif ex_is_all_str:
+				lower_all_ch_names = [name.lower() for name in self.ch_names]
+
+				ex_indices = []
+				ex_valid_names = []
+				for ch in exclude_chs:
+					ch_lower = ch.lower()
+					if ch_lower in lower_all_ch_names:
+						idx = lower_all_ch_names.index(ch_lower)
+						ex_indices.append(idx)
+						ex_valid_names.append(self.ch_names[idx])
+
+				self.exclude_ch_name = ex_valid_names
+				self.exclude_ch_inx = ex_indices
+				LOGGER.info("Exclude channels (names): {}".format(self.exclude_ch_name))
+
+			else:
+				raise ValueError("Exclude channel list must contain only channel names or only indices.")
 
 
 
 
-	def _run_armbr(self, blink_chs):
+
+	def _run_armbr(self, blink_chs, exclude_chs):
 		"""
 		Internal method to execute the ARMBR algorithm on training data.
 
@@ -542,7 +582,11 @@ class ARMBR:
 		----------
 		blink_chs : list of str | list of int
 			Names or indices of channels used to construct the blink reference.
-
+		exclude_chs : list of str | list of int
+			Names or indices of channels to exclude from training. These channels
+			will not be used when estimating blink components but will remain
+			unaltered in the final output.
+		
 		Returns
 		-------
 		self : instance of ARMBR
@@ -565,7 +609,7 @@ class ARMBR:
 		"""
 
 		# Resolve channel names or indices
-		self._prep_blink_channels(blink_chs)
+		self._prep_channels(blink_chs, exclude_chs)
 		
 		if self.alpha.lower() == 'auto':
 			alpha = -1
@@ -574,8 +618,9 @@ class ARMBR:
 
 		if len(self.ch_name_inx) > 0:
 			# Apply ARMBR
+
 			x_purged, best_alpha, blink_mask, blink_comp, blink_spatial_pattern, blink_removal_matrix = run_armbr(
-				self._eeg_data, self.ch_name_inx, self.sfreq, alpha
+				self._eeg_data, self.ch_name_inx, self.exclude_ch_inx, self.sfreq, alpha,
 			)
 
 			# Store outputs
@@ -594,7 +639,7 @@ class ARMBR:
 
 
 
-def run_armbr(X, blink_ch_idx, sfreq, alpha=-1.0):
+def run_armbr(X, blink_ch_idx, exclude_ch_idx, sfreq, alpha=-1.0):
 	"""
 	Run ARMBR blink artifact removal on multichannel EEG data.
 
@@ -609,6 +654,9 @@ def run_armbr(X, blink_ch_idx, sfreq, alpha=-1.0):
 		Input EEG data. Each row is a time sample; each column is a channel.
 	blink_ch_idx : list of int
 		Indices of channels strongly affected by blinks (e.g. Fp1, Fp2).
+	exclude_ch_idx : list of int
+		Indices of channels to be excluded from blink removal extraction.
+		These channels will remain unaltered in the output data.
 	sfreq : float
 		Sampling frequency in Hz.
 	alpha : float
@@ -647,20 +695,38 @@ def run_armbr(X, blink_ch_idx, sfreq, alpha=-1.0):
 		import scipy.signal
 		USE_MNE = False
 	
+	# First step is the band pass filter the signal from 1 to 40 Hz
+	X = _rotate_arr(X)
+	if USE_MNE:
+		X = mne.filter.filter_data(
+			X.T, sfreq=sfreq, l_freq=1, h_freq=40,
+			method='iir', iir_params=dict(order=4, ftype='butter'),
+			verbose=False
+		).T
+	else:
+		# Use scipy filter if MNE is unavailable					
+		sos1 = scipy.signal.butter(N=4, Wn=[40], btype='lowpass',  fs=sfreq, output='sos')
+		sos2 = scipy.signal.butter(N=4, Wn=[1], btype='highpass', fs=sfreq, output='sos')
+
+		filt_blink_tmp = scipy.signal.sosfiltfilt(sos1, X.T)
+		X = scipy.signal.sosfiltfilt(sos2, filt_blink_tmp).T
 
 	
 	X = _rotate_arr(X)
 	good_eeg, _, good_blinks = _data_prep(X, sfreq, blink_ch_idx)
+	
+	mask_in = np.setdiff1d(np.arange(X.shape[1]), exclude_ch_idx).tolist()
 
+	
 	if alpha == -1:
 		alpha_range = np.arange(0.01, 10, 0.1)
 		energy_ratios = []
 		
 		iterator = mne.utils.ProgressBar(alpha_range, mesg='Running ARMBR') if USE_MNE else alpha_range
-			
 
+		
 		for test_alpha in iterator:
-			x_tmp, blink_tmp, _, _, _ = _blink_selection(X, good_eeg, good_blinks, test_alpha)
+			x_tmp, blink_tmp, _, _, _ = _blink_selection(X, good_eeg, good_blinks, test_alpha, mask_in=mask_in)
 
 			if blink_tmp.size > 0 and not np.isnan(np.sum(blink_tmp)):
 				if USE_MNE:
@@ -670,17 +736,13 @@ def run_armbr(X, blink_ch_idx, sfreq, alpha=-1.0):
 						verbose=False
 					).T
 				else:
-					# Use FIR filter with scipy if MNE is unavailable
-					#bpf = scipy.signal.firwin(101, [1, 8], pass_zero=False, fs=sfreq)
-					#blink_filt = scipy.signal.filtfilt(bpf, 1, blink_tmp.T).T
-					
+					# Use scipy filter if MNE is unavailable					
 					sos1 = scipy.signal.butter(N=4, Wn=[8], btype='lowpass',  fs=sfreq, output='sos')
 					sos2 = scipy.signal.butter(N=4, Wn=[1], btype='highpass', fs=sfreq, output='sos')
 
 					filt_blink_tmp = scipy.signal.sosfiltfilt(sos1, blink_tmp.T)
 					blink_filt = scipy.signal.sosfiltfilt(sos2, filt_blink_tmp).T
 			
-	
 
 				ratio = np.sum(blink_filt ** 2) / np.sum((blink_tmp - blink_filt) ** 2)
 				energy_ratios.append(ratio)
@@ -692,7 +754,7 @@ def run_armbr(X, blink_ch_idx, sfreq, alpha=-1.0):
 
 		if energy_ratios.size > 0:
 			best_alpha = alpha_range[np.argmax(energy_ratios)]
-			x_clean, blink_comp, ref_mask, blink_pattern, blink_removal_matrix = _blink_selection(X, good_eeg, good_blinks, best_alpha)
+			x_clean, blink_comp, ref_mask, blink_pattern, blink_removal_matrix = _blink_selection(X, good_eeg, good_blinks, best_alpha, mask_in=mask_in)
 		else:
 			x_clean = X
 			blink_comp = np.array([])
@@ -701,7 +763,7 @@ def run_armbr(X, blink_ch_idx, sfreq, alpha=-1.0):
 			best_alpha = None
 
 	else:
-		x_clean, blink_comp, ref_mask, blink_pattern, blink_removal_matrix = _blink_selection(X, good_eeg, good_blinks, alpha)
+		x_clean, blink_comp, ref_mask, blink_pattern, blink_removal_matrix = _blink_selection(X, good_eeg, good_blinks, alpha, mask_in=mask_in)
 		best_alpha = alpha
 
 	return x_clean, best_alpha, ref_mask, blink_comp, blink_pattern, blink_removal_matrix
@@ -1063,11 +1125,16 @@ def _blink_selection(eeg_orig, eeg_filt, blink_filt, alpha, mask_in=None):
 	Uses IQR-based thresholding on the blink signal to detect blink events,
 	then estimates and removes corresponding spatial blink components.
 	"""
-
+	
+	
 	n_channels = eeg_orig.shape[1]
 
 	if mask_in is None:
 		mask_in = np.ones(n_channels, dtype=int)
+	else:
+		mask_in_ = np.zeros(n_channels, dtype=bool)
+		mask_in_[np.array(mask_in, dtype=int)] = True
+		mask_in = mask_in_
 
 	# Compute inter-quartile statistics
 	Qa = np.quantile(blink_filt, 0.159)

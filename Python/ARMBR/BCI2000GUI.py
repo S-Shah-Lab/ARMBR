@@ -3,6 +3,7 @@ from tkinter import filedialog
 import os
 import sys
 import time
+import functools
 
 import scipy.signal
 import numpy as np
@@ -27,11 +28,12 @@ def timeit(func):
 
 
 class BCI2000GUI(tk.Tk):
-	def __init__(self, bci2000root, data_file_path=None, blink_channels=None): # TODO: add exclude_channels argument (a) here, (b) on the command-line,  (c) in the core of run_armbr.  Excluded channels are (a) not considered during threshold-finding and regression and (b) passed-through by the the spatial filter, without being modified
+	def __init__(self, bci2000root, data_file_path=None, blink_channels=None, exclude_channels=None): 
 		
 		self.bci2000root = os.path.abspath( os.path.expanduser( bci2000root ) )
 		self.default_params_path = os.path.join(self.bci2000root, "parms")
 		self.default_param_name = "ARMBR_BlinkRemovalMatrix.prm"
+		
 		
 		# @@@  We assume that the BCI2000Tools package is
 		#      version-controlled or released as part of the
@@ -45,7 +47,7 @@ class BCI2000GUI(tk.Tk):
 		super().__init__()
 
 		self.title("ARMBR Training GUI.")
-		self.geometry("600x220") # mac needs more width than windows
+		self.geometry("600x250") # mac needs more width than windows
 		
 		# --------------------LINE 1----------------
 		# Label for .dat File selection
@@ -61,9 +63,8 @@ class BCI2000GUI(tk.Tk):
 		self.selected_file_label.grid(row=1, column=0, columnspan=3, padx=25, pady=5, sticky="w")
 
 		
-
-		# --------------------LINE 3----------------
-		self.data_blink_chan = tk.Label(self, text="Select Blink Channels:")
+		# --------------------LINE 2----------------
+		self.data_blink_chan = tk.Label(self, text="Select blink channels:")
 		self.data_blink_chan.grid(row=2, column=0, sticky="e", padx=(0, 5), pady=5)
 		
 		# Entry field for data path
@@ -71,19 +72,28 @@ class BCI2000GUI(tk.Tk):
 		self.blink_channels_entry = tk.Entry(self, textvariable=self.blink_channels_var, width=30)
 		self.blink_channels_entry.grid(row=2, column=1,sticky="w", pady=5)
 		
-		self.check_channels_button = tk.Button(self, text="Show Channels", command=self.show_available_channels)
-		self.check_channels_button.grid(row=2, column=2, padx=0, pady=5, sticky="w")
-
-		# TODO: should have a config box here, similar to the one specifying blink channels, for specifying non-EEG channels
-
-		# --------------------LINE 6----------------
+		self.check_blink_channels_button = tk.Button(self, text="Show channels", command=self.show_available_channels)
+		self.check_blink_channels_button.grid(row=2, column=2, padx=0, pady=5, sticky="w")
+		
+		# --------------------LINE 3----------------
+		self.data_exclude_chan = tk.Label(self, text="Select channels to exclude:")
+		self.data_exclude_chan.grid(row=3, column=0, sticky="e", padx=(0, 5), pady=5)
+		
+		# Entry field for data path
+		self.exclude_channels_var = tk.StringVar()
+		self.exclude_channels_entry = tk.Entry(self, textvariable=self.exclude_channels_var, width=30)
+		self.exclude_channels_entry.grid(row=3, column=1,sticky="w", pady=5)
+		
+		self.check_exclude_channels_button = tk.Button(self, text="Show channels", command=lambda: self.show_available_channels(blinks_or_exclude_chans=0))
+		self.check_exclude_channels_button.grid(row=3, column=2, padx=0, pady=5, sticky="w")
+		
+		
+		
+		# --------------------LINE 4----------------
 		self.run_ARMBR_button = tk.Button(self, text="Run ARMBR", command=self.run_armbr_)
 		self.run_ARMBR_button.grid(row=5, column=1, padx=0, pady=10)
 		
-		# --------------------LINE 7----------------
-		#self.message_display = tk.Text(self, height=4, width=60, wrap="word", bg=self.cget("bg"), borderwidth=0)
-		#self.message_display.grid(row=6, column=0, columnspan=3, padx=5, pady=5, sticky="we")
-		#self.message_display.config(state="disabled")
+		# --------------------LINE 5----------------
 		# Create a frame to hold both the Text widget and the Scrollbar
 		message_frame = tk.Frame(self)
 		message_frame.grid(row=6, column=0, columnspan=3, padx=5, pady=5, sticky="nsew")
@@ -106,6 +116,10 @@ class BCI2000GUI(tk.Tk):
 		if data_file_path: self.select_dat_file( data_file_path )
 		if isinstance( blink_channels, str ): blink_channels = blink_channels.replace( ',', ' ' ).split()
 		if blink_channels: self.blink_channels_var.set( ','.join( blink_channels ) )
+		
+		if isinstance( exclude_channels, str ): exclude_channels = exclude_channels.replace( ',', ' ' ).split()
+		if exclude_channels: self.exclude_channels_var.set( ','.join( exclude_channels ) )
+		
 	
 	def update_message(self, text, color="red", state="normal", do_wrap=True):  
 		self.message_display.config(state=state)
@@ -137,15 +151,21 @@ class BCI2000GUI(tk.Tk):
 			self.selected_file_label.config(text=wrap_text('Selected file: '+self.data_file_name))
 
 
-	def show_available_channels(self):
+	def show_available_channels(self, blinks_or_exclude_chans=1):
+		# if blinks_or_exclude_chans == 1 --> then we are picking blinks channels
+		# if blinks_or_exclude_chans == 0 --> then we are picking channels to remove from analysis
+		
 		# === LOAD DATA ===
 		
+		if not hasattr(self, 'data_file_name'):
+			raise ValueError("No data available! Please load data first.")
+			
 		self.update_message(text='Loading: ' + wrap_text(self.data_file_name))
 
 		from BCI2000Tools.FileReader import bcistream # see @@@
 		b = bcistream(self.data_file_path)
 		eeg, States = b.decode()
-		eeg = np.array(eeg)
+		eeg = np.array(eeg).astype('float64')
 		FsOrig = b.samplingrate()
 
 		self.eeg = eeg
@@ -154,23 +174,9 @@ class BCI2000GUI(tk.Tk):
 		b.close()
 		
 		
-		# === FILTER DATA (1-40 Hz bandpass)===
-		# TODO: remove this and implement a fixed 1--40 band in the core run_armbr, if that is needed for threshold optimization
-		#       ARMBR should not attempt to perform other parts of the user's preprocessing chain beyond spatial filtering for blink removal
-		#       (if it needs a 1--8Hz and 1--40Hz versions of the signal internally, keep that internal).
-		sos1 = scipy.signal.butter(N=4, Wn=[40], btype='lowpass', fs=self.fs, output='sos')
-		sos2 = scipy.signal.butter(N=4, Wn=[1], btype='highpass', fs=self.fs, output='sos')
-
-		if np.size(self.eeg, axis=0) > np.size(self.eeg, axis=1):
-			self.eeg = self.eeg.T
-
-		self.eeg = scipy.signal.sosfiltfilt(sos1, self.eeg)
-		self.eeg = scipy.signal.sosfiltfilt(sos2, self.eeg).T
-		
-		
 		# === POPUP WINDOW ===
 		top = tk.Toplevel(self)
-		top.title("Select Blink Channels")
+		top.title("Select blink channels")
 
 		# === SCROLLABLE FRAME ===
 		canvas = tk.Canvas(top, width=300, height=600)
@@ -219,7 +225,10 @@ class BCI2000GUI(tk.Tk):
 		# === BUTTON TO ADD SELECTED CHANNELS ===
 		def apply_selected_channels():
 			selected = [chan for chan, var in self.channel_vars if var.get()]
-			self.blink_channels_var.set(",".join(selected))
+			if blinks_or_exclude_chans:
+				self.blink_channels_var.set(",".join(selected))
+			else:
+				self.exclude_channels_var.set(",".join(selected))
 			top.destroy()
 
 		add_btn = tk.Button(top, text="Add Channels", command=apply_selected_channels)
@@ -236,7 +245,7 @@ class BCI2000GUI(tk.Tk):
 			from BCI2000Tools.FileReader import bcistream # see @@@
 			b = bcistream(self.data_file_path)
 			eeg, States = b.decode()
-			eeg = np.array(eeg)
+			eeg = np.array(eeg).astype('float64')
 			FsOrig = b.samplingrate()
 			
 			self.eeg = eeg
@@ -255,16 +264,19 @@ class BCI2000GUI(tk.Tk):
 			self.eeg = scipy.signal.sosfiltfilt(sos2, self.eeg).T
 		
 		
-
 		# === PARSE BLINK CHANNELS ===
 		self.blink_chan = [chan.strip() for chan in self.blink_channels_entry.get().split(",")]
 		self.blink_chan_ix = [self.channel_names.index(blk_chn) for blk_chn in self.blink_chan]
-
+		
+		self.exclude_chan = [chan.strip() for chan in self.exclude_channels_entry.get().split(",")]
+		self.exclude_chan_ix = [self.channel_names.index(blk_chn) for blk_chn in self.exclude_chan]
+		
+		
 		# Create ARMBR object (using filtered EEG)
 		self.update_message(text='Running ARMBR. This can take a while...')
 		self.message_display.update()  # Force update
 		
-		_, _, _, _, _, blink_removal_matrix = run_armbr(self.eeg, self.blink_chan_ix, int(self.fs), -1)
+		_, _, _, _, _, blink_removal_matrix = run_armbr(self.eeg, self.blink_chan_ix, self.exclude_chan_ix, int(self.fs), -1)
 
 		self.update_message(text='ARMBR done. Weights not saved.')
 		self.message_display.update()  # Force update
@@ -308,7 +320,7 @@ class BCI2000GUI(tk.Tk):
 		text_to_display = (
 				f"Loading file: {self.data_file_path}\n"
 				f"Blink channels: {self.blink_chan}\n"
-				f"Saving parameter file: {self.params_path_var.get()}/{self.params_name}\n\n"
+				f"Saving parameter file: {os.path.join( self.default_params_path, self.default_param_name )}\n\n"
 				"Would you like to continue?"
 			)
 
@@ -355,41 +367,7 @@ class BCI2000GUI(tk.Tk):
 		
 		self.update_message(text='Blink channels: ' + str(self.blink_chan))
 		
-		
-	def select_data_path(self, folder_path=None): # TODO: remove? seems to rely on data_path_var and data_file_var, which no longer exist
-		# Open folder dialog to select the directory
-		if not folder_path:
-			initialdir = os.path.join( self.bci2000root, 'data' )
-			if not os.path.isdir( initialdir ): initialdir = self.bci2000root
-			folder_path = filedialog.askdirectory(title="Select Folder with .dat Files", initialdir=initialdir)
-		if folder_path:
-			folder_path = os.path.abspath( os.path.expanduser( folder_path ) )
-			# Update the entry field with the selected folder path
-			#self.data_path_var.set(folder_path)
-			# Update the dropdown with .dat files in the selected folder
-			#self.update_dat_dropdown(folder_path)
-		
-			
-	def update_dat_dropdown(self, folder_path): # TODO: remove?
-		# List all .dat files in the selected directory
-		dat_files = [f for f in os.listdir(folder_path) if f.endswith('.dat')]
-		# If there are .dat files, update the dropdown
-		if dat_files:
-			# Set the default value for the dropdown
-			self.data_file_var.set(dat_files[0])
-			# Update the dropdown options
-			menu = self.data_file_menu["menu"]
-			menu.delete(0, "end")  # Remove all existing entries
-			for file in dat_files:
-				menu.add_command(label=file, command=tk._setit(self.data_file_var, file))
-			
-			# Ensure that the dropdown menu is clickable again after updating
-			self.data_file_menu.grid()  # Refresh the grid configuration
 
-		else:
-			# If no .dat files are found, clear the dropdown
-			self.data_file_var.set("")
-			self.data_file_menu["menu"].delete(0, "end")
 
 def RunGUI( *pargs, **kwargs ):	
 	app = BCI2000GUI( *pargs, **kwargs )
