@@ -64,8 +64,10 @@ def load_data(filename):
 			eeg_data, states = reader.decode()
 			sampling_rate    = reader.samplingfreq_hz
 			ch_names         = reader.params.ChannelNames
+		finally:
+			reader.close()
 		info = mne.create_info(ch_names=ch_names, sfreq=sampling_rate, ch_types='eeg')
-		raw = mne.io.RawArray(eeg_data*1e-6, info)
+		raw = mne.io.RawArray(np.asarray(eeg_data)*1e-6, info)
 		return raw
 	
 	elif file_extension == '.txt':
