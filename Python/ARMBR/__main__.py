@@ -75,7 +75,7 @@ def load_data(filename):
 		return blink_removal_matrix
 		
 	else:
-		raise ValueError('At the moments this code supports files of type .fif, .edf, .dat and .txt.')
+		raise SystemExit('At the moment this code supports files of type .fif, .edf, .dat and .txt.')
 		
 		
 
@@ -96,63 +96,65 @@ if OPTS1.BCI2000:
 import numpy as np
 import mne 
 
+if not OPTS1.fit:
+	raise SystemExit('no training data or weights file specified')
+
+fit_data = load_data( OPTS1.fit )
+print(' ')
 blink_channels		= OPTS1.blink_channels.replace(',',' ').split()
 exclude_channels	= OPTS1.exclude_channels.replace(',',' ').split()
 
-if len(OPTS1.fit) > 0:
-	if not OPTS1.apply: OPTS1.apply = OPTS1.fit
+if not OPTS1.apply:
+	OPTS1.apply = OPTS1.fit
+
+if not blink_channels and not isinstance(fit_data, np.ndarray):
+	raise SystemExit('no blink channels specified')
 	
-	if len(blink_channels) > 0:
-		
-		fit_data = load_data( OPTS1.fit )
-		if isinstance(fit_data, mne.io.BaseRaw):
-			myARMBR = ARMBR(blink_channels)
-			myARMBR.fit(fit_data, exclude = exclude_channels)
-			raw_apply	= load_data( OPTS1.apply )
-			myARMBR.apply(raw_apply)
-		
-		elif isinstance(fit_data, np.ndarray):
-			spatial_filters_as_rows = fit_data.T
-			raw_apply	= load_data( OPTS1.apply )
-			mne.utils._check_preload(raw_apply, 'apply') # Check if raw is preloaded (required to modify data)
-			eeg_data	= raw_apply.get_data(picks='eeg')
-			eeg_clean	= spatial_filters_as_rows.dot(eeg_data)
-			raw_apply.apply_function(lambda x: eeg_clean, picks='eeg', channel_wise=False) # Apply cleaned data back to Raw object
+if isinstance(fit_data, mne.io.BaseRaw):
+	myARMBR = ARMBR(blink_channels)
+	myARMBR.fit(fit_data, exclude = exclude_channels)
+	raw_apply	= load_data( OPTS1.apply )
+	if OPTS1.plot: before = raw_apply.copy()
+	myARMBR.apply(raw_apply)
+	
+elif isinstance(fit_data, np.ndarray):
+	spatial_filters_as_rows = fit_data.T
+	raw_apply	= load_data( OPTS1.apply )
+	if OPTS1.plot: before = raw_apply.copy()
+	mne.utils._check_preload(raw_apply, 'apply') # Check if raw is preloaded (required to modify data)
+	eeg_data	= raw_apply.get_data(picks='eeg')
+	eeg_clean	= spatial_filters_as_rows.dot(eeg_data)
+	raw_apply.apply_function(lambda x: eeg_clean, picks='eeg', channel_wise=False) # Apply cleaned data back to Raw object
+	
+else:
+	raise ValueError("Wrong extension.")
+
+
+
+
+# Save weights
+if OPTS1.save_weights: 
+	print( 'saving weights to ' + OPTS1.save_weights )
+	np.savetxt(OPTS1.save_weights, myARMBR.blink_removal_matrix, fmt="%.10f")
+
+
+# Plot EEG before and after blink removal
+if OPTS1.plot:
+	import matplotlib.pyplot as plt
+	if 'IPython' in sys.modules: plt.ion()
+	for title, dataset in [ ( 'before', before ), ( 'after', raw_apply ) ]:
+		dataset.copy().filter( l_freq=1, h_freq=40, method='iir', 
+							   iir_params=dict(order=4, ftype='butter'), 
+							   verbose=False).plot( title=title, scalings=50e-6 )
+	if 'IPython' not in sys.modules: plt.show()
+
+if OPTS1.save_eeg:
+	raw_apply.save(OPTS1.save_eeg)
+else:
+	print('Data not saved.')
 			
-		else:
-			raise ValueError("Wrong extension.")
 
 	
-	
-		
-		
-		
-		# Save weights
-		if OPTS1.save_weights: 
-			np.savetxt(OPTS1.save_weights, myARMBR.blink_removal_matrix, fmt="%.10f")
-	
-	
-		# Plot EEG after blink removal
-		if OPTS1.plot:
-			import matplotlib.pyplot as plt
-			raw_apply.copy().filter(	l_freq=1, 
-										h_freq=40, 
-										method='iir', 
-										iir_params=dict(order=4, ftype='butter'), 
-										verbose=False).plot()
-			plt.show()
-		
-		if OPTS1.save_eeg:
-			raw_apply.save(OPTS1.save_eeg)
-		else:
-			print('Data not saved.')
-			
-	else: 
-		print('No blink channels found.')
-
-	
-else: # no data
-	print('No data directory.')
 	
 	
 
