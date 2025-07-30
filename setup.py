@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import os
 import sys
 import ast
@@ -79,7 +80,7 @@ def update_readme_version(readme_path, version):
 	replaced = False
 	for line in lines:
 		if version_line_pattern.match(line) and not replaced:
-			updated_lines.append(f"Version {version}\n")
+			updated_lines.append("Version {}\n".format(version))
 			replaced = True
 		else:
 			updated_lines.append(line)
@@ -87,7 +88,7 @@ def update_readme_version(readme_path, version):
 	if replaced:
 		with open(readme_path, 'w', encoding='utf-8') as f:
 			f.writelines(updated_lines)
-		print(f"✅ README.md updated to Version {version}")
+		print("✅ README.md updated to Version {}".format(version))
 	else:
 		print("⚠️ No Version line found in README.md")
 

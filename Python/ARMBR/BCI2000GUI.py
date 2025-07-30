@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import tkinter as tk
 from tkinter import filedialog
 import os
@@ -22,7 +23,7 @@ def timeit(func):
 		start = time.time()
 		result = func(*args, **kwargs)
 		end = time.time()
-		print(f"[⏱️] {func.__name__} took {end - start:.2f} seconds.")
+		print("[⏱️] {} took {:.2f} seconds.".format(func.__name__, end - start ))
 		return result
 	return wrapper
 
@@ -318,11 +319,11 @@ class BCI2000GUI(tk.Tk):
 		info_window.geometry("600x300")
 
 		text_to_display = (
-				f"Loading file: {self.data_file_path}\n"
-				f"Blink channels: {self.blink_chan}\n"
-				f"Saving parameter file: {os.path.join( self.default_params_path, self.default_param_name )}\n\n"
+				"Loading file: {datapath}\n"
+				"Blink channels: {blinkchan}\n"
+				"Saving parameter file: {parampath}\n\n"
 				"Would you like to continue?"
-			)
+			).format(datapath=self.data_file_path, blinkchan=self.blink_chan, parampath=os.path.join( self.default_params_path, self.default_param_name))
 
 							
 		# Add information text

@@ -5,16 +5,16 @@ The EEG data types that the code supposed are: .fif, .edf, and .dat files.
 Before you run the code, make sure you are in the Python directory of the ARMBR repository.
 
 If you want to use the indices of the blink reference channels then use below, where -c "79,92" represents indices 79 and 92:
-python -m ARMBR -f "..\SemiSyntheticData\Sub1\Sub1_Synthetic_Blink_Contaminated_EEG.fif" -c "79,92" --plot
+python -m ARMBR -f "../SemiSyntheticData/Sub1/Sub1_Synthetic_Blink_Contaminated_EEG.fif" -c "79,92" --plot
 
 If you want to use the name of the blink reference channels then use below, where -c "C16,C29" represents channel name C16 and C29:
-python -m ARMBR -f "..\SemiSyntheticData\Sub1\Sub1_Synthetic_Blink_Contaminated_EEG.fif" -c "C16,C29" --plot
+python -m ARMBR -f "../SemiSyntheticData/Sub1/Sub1_Synthetic_Blink_Contaminated_EEG.fif" -c "C16,C29" --plot
 
 python -m ARMBR requires the mne package.
 The ARMBR module alone needs either mne or scipy.
 
 Code by Ludvik Alkhoury, Giacomo Scanavini, and Jeremy hill
-June 25, 2024
+June 25, 2024--
 
 """
 import argparse
@@ -24,10 +24,10 @@ import sys
 
 
 parser1 = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter, prog='python -m ARMBR')
-parser1.add_argument( "-f", "--fit",      			default='', type=str,	help='Full path of the EEG data to train ARMBR on. At this point, the code supports EEG files of type .fif, .edf, .dat and .txt file that contains spatial-filter weights, previously saved by --save-weights.')
-parser1.add_argument( "-a", "--apply",    			default='', type=str,	help='Full path of the EEG data to apply ARMBR to. At this point, the code supports EEG files of type .fif, .edf, and .dat.')
+parser1.add_argument( "-f", "--fit",      			default='', type=str,	help='Full path of the EEG data to train ARMBR on. Supported formats are .fif, .edf, and .dat. You can also specify a .txt file containing spatial-filter weights previously saved by --save-weights.')
+parser1.add_argument( "-a", "--apply",    			default='', type=str,	help='Full path of the EEG data to apply ARMBR to. Supported formats are .fif, .edf, and .dat.')
 parser1.add_argument( "-c", "--blink-channels", 	default='', type=str,	help='Names or indices of blink reference channel(s).')
-parser1.add_argument( "-e", "--exclude-channels", 	default='', type=str,	help='Names or indices of channel(s) to exclude from spatial filter calculation.')
+parser1.add_argument( "-e", "--exclude-channels", 	default='', type=str,	help='Names or indices of channel(s) to exclude from spatial filter calculation. The spatial filter will pass these through unchanged.')
 parser1.add_argument( "--save-eeg", 				default='', type=str,	help='Use to save the EEG data after blink removal as a .fif mne raw object.')
 parser1.add_argument( "--save-weights", 			default='', type=str,	help='Use to save the spatial filter weights computed from ARMBR.')
 parser1.add_argument( "--BCI2000", 					default='', type=str,	help='Go into BCI2000-support GUI mode, targeting the specified BCI2000 distribution root dir.')
@@ -51,11 +51,19 @@ def load_data(filename):
 		return raw
 		
 	elif file_extension == '.dat':
-		from BCI2kReader import BCI2kReader as b2k
-		reader	      = b2k.BCI2kReader(filename)
-		eeg_data      = reader.signals
-		sampling_rate = reader.samplingrate
-		ch_names      = reader.parameters['ChannelNames']
+		try:
+			from BCI2000Tools.FileReader import bcistream
+		except:
+			from BCI2kReader import BCI2kReader as b2k
+			reader	      = b2k.BCI2kReader(filename)
+			eeg_data      = reader.signals
+			sampling_rate = reader.samplingrate
+			ch_names      = reader.parameters['ChannelNames']
+		else:
+			reader           = bcistream(filename)
+			eeg_data, states = reader.decode()
+			sampling_rate    = reader.samplingfreq_hz
+			ch_names         = reader.params.ChannelNames
 		info = mne.create_info(ch_names=ch_names, sfreq=sampling_rate, ch_types='eeg')
 		raw = mne.io.RawArray(eeg_data*1e-6, info)
 		return raw

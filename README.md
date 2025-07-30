@@ -1,5 +1,5 @@
 # ARMBR: Artifact-reference multivariate backward regression
-Version 2.0.7
+Version 2.0.8
 
 Artifact-reference multivariate backward regression (ARMBR): a novel method for EEG blink artifact removal with minimal data requirements
 
