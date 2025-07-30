@@ -112,12 +112,12 @@ if len(OPTS1.fit) > 0:
 			myARMBR.apply(raw_apply)
 		
 		elif isinstance(fit_data, np.ndarray):
+			spatial_filters_as_rows = fit_data.T
 			raw_apply	= load_data( OPTS1.apply )
 			mne.utils._check_preload(raw_apply, 'apply') # Check if raw is preloaded (required to modify data)
 			eeg_data	= raw_apply.get_data(picks='eeg')
-			if eeg_data.shape[0] < eeg_data.shape[1]: eeg_data = eeg_data.T  # Transpose to make samples on rows
-			eeg_clean	= eeg_data.dot(fit_data)
-			raw_apply.apply_function(lambda x: eeg_clean.T, picks='eeg', channel_wise=False) # Apply cleaned data back to Raw object
+			eeg_clean	= spatial_filters_as_rows.dot(eeg_data)
+			raw_apply.apply_function(lambda x: eeg_clean, picks='eeg', channel_wise=False) # Apply cleaned data back to Raw object
 			
 		else:
 			raise ValueError("Wrong extension.")
