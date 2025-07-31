@@ -509,7 +509,7 @@ class ARMBR:
 		"""
 
 		# === Handle Blink Channels (unchanged logic) ===
-		if isinstance(ch, str): ch = ch.replace(',', ' ').split()
+		if isinstance(blink_chs, str): blink_chs = blink_chs.replace(',', ' ').split()
 		is_all_int = all(isinstance(ch, int) or (isinstance(ch, str) and ch.isdigit()) for ch in blink_chs)
 		is_all_str = all(isinstance(ch, str) for ch in blink_chs)
 

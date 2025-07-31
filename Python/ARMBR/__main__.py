@@ -21,6 +21,7 @@ import argparse
 import warnings
 import os
 import sys
+import time
 
 
 parser1 = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter, prog='python -m ARMBR')
@@ -74,6 +75,29 @@ def load_data(filename):
 		blink_removal_matrix = np.loadtxt(filename)
 		return blink_removal_matrix
 		
+	elif file_extension == '.prm':
+		failure = SystemExit("failed to parse BCI2000 parameter SpatialFilter out of {}".format(filename))
+		with open(filename) as fh: lines = [line.strip().split('=', 1)[-1] for line in fh if 'SpatialFilter=' in line.split()]
+		if not lines: raise failure
+		tokens = lines[-1].split()
+		shape = []
+		channel_names = []
+		for i in range(2):
+			if not tokens: raise failure
+			try: count = int(tokens[0])
+			except:
+				if tokens[0] != '{' or '}' not in tokens: raise failure
+				count = tokens.index('}') - 1
+				if not channel_names: channel_names = tokens[1:count+1]
+				tokens[:count + 1] = []
+			shape.append(count)
+			tokens.pop(0)
+		blink_removal_matrix = np.zeros(shape, dtype=float)
+		if len(tokens) != blink_removal_matrix.size: raise failure
+		try: weights = [float(weight) for weight in tokens]
+		except: raise failure
+		blink_removal_matrix.T.flat = weights
+		return blink_removal_matrix
 	else:
 		raise SystemExit('At the moment this code supports files of type .fif, .edf, .dat and .txt.')
 		
@@ -107,7 +131,8 @@ exclude_channels	= OPTS1.exclude_channels.replace(',',' ').split()
 if not OPTS1.apply:
 	OPTS1.apply = OPTS1.fit
 
-if not blink_channels and not isinstance(fit_data, np.ndarray):
+loaded_weights_directly = isinstance(fit_data, np.ndarray)
+if not blink_channels and not loaded_weights_directly:
 	raise SystemExit('no blink channels specified')
 	
 if isinstance(fit_data, mne.io.BaseRaw):
@@ -117,7 +142,7 @@ if isinstance(fit_data, mne.io.BaseRaw):
 	if OPTS1.plot: before = raw_apply.copy()
 	myARMBR.apply(raw_apply)
 	
-elif isinstance(fit_data, np.ndarray):
+elif loaded_weights_directly:
 	spatial_filters_as_rows = fit_data.T
 	raw_apply	= load_data( OPTS1.apply )
 	if OPTS1.plot: before = raw_apply.copy()
@@ -135,7 +160,27 @@ else:
 # Save weights
 if OPTS1.save_weights: 
 	print( 'saving weights to ' + OPTS1.save_weights )
-	np.savetxt(OPTS1.save_weights, myARMBR.blink_removal_matrix, fmt="%.10f")
+	if OPTS1.save_weights.lower().endswith( '.prm' ):
+		if loaded_weights_directly:
+			print( r'/!\ cannot save weights to .prm format without channel information from the original data file' )
+		else:
+			with open(OPTS1.save_weights, 'w') as fh:
+				fh.write("""\
+Filtering int    SpatialFilterType= 1 // made {datestamp} by ARMBR {version} targeting {{{blink_channels}}} and excluding {{{exclude_channels}}} in {filename}
+Filtering matrix SpatialFilter=    {{ {channels} }} {{ {channels} }} {weights}
+Source    list   TransmitChList= {nChannels}  {channels}
+				""".rstrip('\t ').format(
+					version = __version__,
+					datestamp = time.strftime('%Y-%m-%d %H:%M:%S'),
+					blink_channels   = ','.join(blink_channels),
+					exclude_channels = ','.join(exclude_channels),
+					filename = os.path.basename( OPTS1.fit ),
+					channels = ' '.join(fit_data.info['ch_names']),
+					nChannels = myARMBR.blink_removal_matrix.shape[1],
+					weights = ' '.join(str(weight) for row in myARMBR.blink_removal_matrix.T for weight in row),
+				))
+	else:
+		np.savetxt(OPTS1.save_weights, myARMBR.blink_removal_matrix, fmt="%.10f")
 
 
 # Plot EEG before and after blink removal
