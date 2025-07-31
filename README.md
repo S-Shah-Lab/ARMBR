@@ -30,11 +30,18 @@ Below, we provide instructions on how to:
 
 # Download Package
 
-You can download the package directly from this repository. If so, we recommend downloading a stable release. 
+You can download the package directly from PyPI:
+```
+python -m pip install ARMBR
 
-Alternatively, you can use git:
+# or 
+
+python3 -m pip install ARMBR
+```
+
+Alternatively, for a more developer-friendly setup, you can use git:
 1) Select a directory to save this repository to. This can be done by creating a directory on your Desktop (for example: C:/MyPC/Desktop/GitRepo/).
-Open the Git bash and type:
+Open the Git Bash terminal and type:
 ```
 cd "C:/MyPC/Desktop/GitRepo/"
 ```
@@ -68,12 +75,12 @@ In the example above, the BCI2000 path is provided explicitly, but you can also 
 ```
 python -m ARMBR --install-bci2000-demo
 ```
-In this case, you will be prompted to select the location of your BCI2000 distribution. Either way, ARMBR will create `ARMBR_Fit.bat` as well as `ARMBR_Apply.bat`, in BCI2000's `batch` folder.
-`ARMBR_Fit.bat` is simply a wrapper around this command, to start the GUI:
+In this case, you will be prompted to select the location of your BCI2000 distribution. Either way, ARMBR will create `ARMBR_1_Fit.bat` as well as `ARMBR_2_Apply.bat`, in BCI2000's `batch` folder.
+`ARMBR_1_Fit.bat` is simply a wrapper around this command, to start the GUI:
 ```
 python -m ARMBR --BCI2000=C:\path\to\bci2000_root_directory
 ```
-The GUI allows you to save a blink-removal parameter file in BCI2000's `parms` directory, which `ARMBR_Apply.bat` will automatically pick up.  You can launch `ARMBR_Apply.bat` to play back the default data file from BCI2000's `data/samplefiles` collection, or you can supply a different filename as a command-line argument, or in the BCI2000 Config dialog.
+The GUI allows you to save a blink-removal parameter file in BCI2000's `parms` directory, which `ARMBR_2_Apply.bat` will automatically pick up.  You can launch `ARMBR_2_Apply.bat` to play back the default data file from BCI2000's `data/samplefiles` collection, or you can supply a different filename as a command-line argument, or in the BCI2000 Config dialog.
 
 
 # MATLAB Implementation 

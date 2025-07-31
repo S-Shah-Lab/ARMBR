@@ -377,8 +377,8 @@ def install_demo( bci2000root=None, show=False ):
 	for directory in dirs:
 		directory = os.path.abspath(os.path.expanduser(directory))
 		if os.path.exists(directory):
-			create_file(ARMBR_FIT_CONTENT,   os.path.join(directory, 'batch'), 'ARMBR_Fit.bat')
-			create_file(ARMBR_APPLY_CONTENT, os.path.join(directory, 'batch'), 'ARMBR_Apply.bat')
+			create_file(ARMBR_FIT_CONTENT,   os.path.join(directory, 'batch'), 'ARMBR_1_Fit.bat')
+			create_file(ARMBR_APPLY_CONTENT, os.path.join(directory, 'batch'), 'ARMBR_2_Apply.bat')
 		else:
 			print("⚠️  Directory '{directory}' does not exist.".format(directory=directory))
 			exit_status = 1
