@@ -57,7 +57,20 @@ python -m pip install -e  ./Python
 [https://osf.io/th2g6/](https://osf.io/th2g6/)
 
 
-Download folder `SemiSyntheticData` and add it to the main ARMBR directory.
+5) Download folder `SemiSyntheticData` and add it to the main ARMBR directory.
+
+
+6) OPTIONAL: If you wish to train and apply ARMBR in BCI2000, first you have to install the proper batch files using:
+```
+python -m ARMBR --BCI2000=C:\path\to\bci2000 --install-bci2000-demo
+```
+Here, the BCI2000 path is provided. However, you don't have to define the distribution directory and use:
+```
+python -m ARMBR --install-bci2000-demo
+```
+In this case, you will be prompted to provide one or many BCI2000 distribution directories. The code will create `ARMBR_Fit.bat` as well as `ARMBR_Apply.bat`, under `\batch` folder.
+
+
 
 # MATLAB Implementation 
 
