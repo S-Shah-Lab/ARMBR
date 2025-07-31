@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import os
 import sys
 import ast
@@ -86,11 +85,11 @@ def update_readme_version(readme_path, version):
 			updated_lines.append(line)
 
 	if replaced:
-		with open(readme_path, 'w', encoding='utf-8') as f:
-			f.writelines(updated_lines)
-		print("✅ README.md updated to Version {}".format(version))
+		with open(readme_path, 'wb') as f:
+			f.write(''.join(updated_lines).encode('utf-8'))
+		print("README.md updated to Version {}".format(version))
 	else:
-		print("⚠️ No Version line found in README.md")
+		print(r"/!\  No Version line found in README.md")
 
 
 current_version = get_version(package_dir, 'ARMBR', 'armbr.py')
@@ -100,8 +99,8 @@ setup_args = dict(name='ARMBR',
 package_dir={ '' : package_dir },
       version=current_version, # @VERSION_INFO@
       description='Python implementation of the ARMBR blink removal method',
-	  long_description=long_description,
-	  long_description_content_type="text/markdown",
+      long_description=long_description,
+      long_description_content_type="text/markdown",
       url='https://github.com/S-Shah-Lab/ARMBR.git',
       author='Ludvik Alkhoury',
       author_email='Ludvik.Alkhoury@gmail.com',
