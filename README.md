@@ -64,11 +64,11 @@ python -m pip install -e  ./Python
 ```
 python -m ARMBR --BCI2000=C:\path\to\bci2000 --install-bci2000-demo
 ```
-Here, the BCI2000 path is provided. However, you don't have to define the distribution directory and use:
+Here, the BCI2000 path is provided using `--BCI2000`. However, you don't have to define the distribution directory and use:
 ```
 python -m ARMBR --install-bci2000-demo
 ```
-In this case, you will be prompted to provide one or many BCI2000 distribution directories. The code will create `ARMBR_Fit.bat` as well as `ARMBR_Apply.bat`, under `\batch` folder.
+In this case, a GUI will appear, allowing you to select the BCI2000 distribution directories. The code will create `ARMBR_Fit.bat` as well as `ARMBR_Apply.bat`, under `\batch` folder in your BCI2000 distribution directory.
 
 
 
