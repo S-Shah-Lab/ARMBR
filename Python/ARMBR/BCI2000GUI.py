@@ -8,8 +8,6 @@ import functools
 
 import scipy.signal
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 from ARMBR import run_armbr, save_bci2000_weights
 
@@ -451,6 +449,10 @@ reset system
 startup system localhost
 
 set environment DATFILE  $1 
+#if [ $DATFILE == "" ]
+#	set environment DATFILE ${system python -c "import tkinter.filedialog;root=tkinter.Tk();root.withdraw();print(tkinter.filedialog.askopenfilename(filetypes=(('BCI2000 data files','*.dat'),)))"}
+#   #uncomment these lines if your operating system is configured to have system-wide access to a tkinter-enabled `python`
+#end
 if [ $DATFILE == "" ]
 	set environment DATFILE ${real path "../data/samplefiles/eeg1_2.dat"}
 	warn playing default file $DATFILE

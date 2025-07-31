@@ -39,10 +39,9 @@ parser1.add_argument( "--install-bci2000-demo",		action = 'store_true',	help='In
 
 OPTS1 = parser1.parse_args()
 
-
-
 from ARMBR import ARMBR, __version__
 from ARMBR import load_bci2000_weights, save_bci2000_weights
+
 
 def load_data(filename):
 	
@@ -107,12 +106,12 @@ if OPTS1.BCI2000:
 		if getattr( OPTS1, opt ): raise SystemExit( "The --%s option is not supported in --BCI2000 GUI mode." % opt.replace( '_', '-' ) )
 	sys.exit( run_gui( bci2000root=OPTS1.BCI2000, data_file_path=OPTS1.fit, blink_channels=OPTS1.blink_channels ) )
 
-
-import numpy as np
-import mne 
-
 if not OPTS1.fit:
 	raise SystemExit('no training data or weights file specified')
+
+import numpy as np
+try: import mne 
+except: raise SystemExit('For this mode of operation, you will first need to:  python -m pip install mne')
 
 fit_data = load_data( OPTS1.fit )
 print(' ')
@@ -161,21 +160,23 @@ if OPTS1.save_weights:
 		np.savetxt(OPTS1.save_weights, myARMBR.blink_removal_matrix, fmt="%.10f")
 
 
-# Plot EEG before and after blink removal
-if OPTS1.plot:
-	import matplotlib.pyplot as plt
-	if 'IPython' in sys.modules: plt.ion()
-	for title, dataset in [ ( 'before', before ), ( 'after', raw_apply ) ]:
-		dataset.copy().filter( l_freq=1, h_freq=40, method='iir', 
-							   iir_params=dict(order=4, ftype='butter'), 
-							   verbose=False).plot( title=title, scalings=50e-6 )
-	if 'IPython' not in sys.modules: plt.show()
-
 if OPTS1.save_eeg:
 	raw_apply.save(OPTS1.save_eeg)
 else:
 	print('Data not saved.')
 			
+# Plot EEG before and after blink removal
+if OPTS1.plot:
+	try: import matplotlib.pyplot as plt
+	except: plt = None # if we got this far, then I guess mne must be using a different plotting backend?
+	# except: raise SystemExit( 'To support the --plot option, you need to do:   python -m pip install matplotlib' )
+	if plt and 'IPython' in sys.modules: plt.ion()
+	for title, dataset in [ ( 'before', before ), ( 'after', raw_apply ) ]:
+		dataset.copy().filter( l_freq=1, h_freq=40, method='iir', 
+							   iir_params=dict(order=4, ftype='butter'), 
+							   verbose=False).plot( title=title, scalings=50e-6 )
+	if plt and 'IPython' not in sys.modules: plt.show()
+
 
 	
 	
