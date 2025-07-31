@@ -266,11 +266,12 @@ class BCI2000GUI(tk.Tk):
 		
 		
 		# === PARSE BLINK CHANNELS ===
-		self.blink_chan = [chan.strip() for chan in self.blink_channels_entry.get().split(",")]
+		self.blink_chan = self.blink_channels_entry.get().replace(',', ' ').split()
 		self.blink_chan_ix = [self.channel_names.index(blk_chn) for blk_chn in self.blink_chan]
+		# TODO: deliver appropriate error if an illegal channel was specified
 		
-		self.exclude_chan = [chan.strip() for chan in self.exclude_channels_entry.get().split(",")]
-		self.exclude_chan_ix = [self.channel_names.index(blk_chn) for blk_chn in self.exclude_chan]
+		self.exclude_chan = self.exclude_channels_entry.get().replace(',', ' ').split()
+		self.exclude_chan_ix = [self.channel_names.index(blk_chn) for blk_chn in self.exclude_chan if blk_chn in self.channel_names]
 		
 		
 		# Create ARMBR object (using filtered EEG)

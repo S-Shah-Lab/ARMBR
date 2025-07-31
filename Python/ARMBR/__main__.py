@@ -112,7 +112,7 @@ if not blink_channels and not isinstance(fit_data, np.ndarray):
 	
 if isinstance(fit_data, mne.io.BaseRaw):
 	myARMBR = ARMBR(blink_channels)
-	myARMBR.fit(fit_data, exclude = exclude_channels)
+	myARMBR.fit(fit_data, exclude=exclude_channels)
 	raw_apply	= load_data( OPTS1.apply )
 	if OPTS1.plot: before = raw_apply.copy()
 	myARMBR.apply(raw_apply)

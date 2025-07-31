@@ -509,6 +509,7 @@ class ARMBR:
 		"""
 
 		# === Handle Blink Channels (unchanged logic) ===
+		if isinstance(ch, str): ch = ch.replace(',', ' ').split()
 		is_all_int = all(isinstance(ch, int) or (isinstance(ch, str) and ch.isdigit()) for ch in blink_chs)
 		is_all_str = all(isinstance(ch, str) for ch in blink_chs)
 
@@ -538,6 +539,7 @@ class ARMBR:
 
 		# === Handle Exclude Channels (new part) ===
 		if exclude_chs is not None:
+			if isinstance(exclude_chs, str): exclude_chs = exclude_chs.replace(',', ' ').split()
 			ex_is_all_int = all(isinstance(ch, int) or (isinstance(ch, str) and ch.isdigit()) for ch in exclude_chs)
 			ex_is_all_str = all(isinstance(ch, str) for ch in exclude_chs)
 
