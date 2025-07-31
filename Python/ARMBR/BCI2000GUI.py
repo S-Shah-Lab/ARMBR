@@ -11,7 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-from ARMBR import run_armbr
+from ARMBR import run_armbr, save_bci2000_weights
 
 def wrap_text(text, width=70):
 	return '\n'.join(text[i:i+width] for i in range(0, len(text), width))
@@ -283,33 +283,11 @@ class BCI2000GUI(tk.Tk):
 		self.update_message(text='ARMBR done. Weights not saved.')
 		self.message_display.update()  # Force update
 
-		from BCI2000Tools.Electrodes import ChannelSet # see @@@
-		c = ChannelSet(" ".join(self.channel_names))
-		m = blink_removal_matrix
+		self.m = blink_removal_matrix
 
-		self.m = m
-		blink_free_eeg = m @ c
-
-		
-		c.BCI2000SpatialFilterParameters(
-			m, 
-			outputFileName=os.path.join( self.default_params_path, self.default_param_name ), 
-			fullFormat=True
-		)
-		
-		
-		# Construct the TransmitChanList line using self.blink_chan
-		transmit_line = "Source list TransmitChList= %5d" % len(self.channel_names) + " " + " ".join(self.channel_names)
-
-		# Append it to the .prm file
-		with open(os.path.join(self.default_params_path, self.default_param_name), "a") as f:
-			f.write(transmit_line + "\n")
-
-		weights_saved_at = 'Weights saved at: '+ os.path.join( self.default_params_path, self.default_param_name )
-		
-		self.update_message(text=weights_saved_at, do_wrap=False)
-
-
+		weights_file_name = os.path.join(self.default_params_path, self.default_param_name)
+		save_bci2000_weights( self.m, channel_names=self.channel_names, filename=weights_file_name, blink_channels=self.blink_chan, exclude_channels=self.exclude_chan)
+		self.update_message(text='Weights saved at: '+ weights_file_name, do_wrap=False)
 		
 		return self
 		

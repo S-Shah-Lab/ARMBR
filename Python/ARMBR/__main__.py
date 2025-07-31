@@ -38,6 +38,8 @@ OPTS1 = parser1.parse_args()
 
 
 
+from ARMBR import ARMBR, __version__, load_bci2000_weights, save_bci2000_weights
+
 def load_data(filename):
 	
 	file_extension = os.path.splitext(filename)[1]
@@ -74,13 +76,12 @@ def load_data(filename):
 		blink_removal_matrix = np.loadtxt(filename)
 		return blink_removal_matrix
 		
+	elif file_extension == '.prm':
+		blink_removal_matrix, channel_names = load_bci2000_weights(filename, SystemExit)
+		return blink_removal_matrix
 	else:
 		raise SystemExit('At the moment this code supports files of type .fif, .edf, .dat and .txt.')
 		
-		
-
-
-from ARMBR import ARMBR, __version__
 
 if OPTS1.version:
 	print( 'ARMBR %s' % __version__ )
@@ -107,7 +108,8 @@ exclude_channels	= OPTS1.exclude_channels.replace(',',' ').split()
 if not OPTS1.apply:
 	OPTS1.apply = OPTS1.fit
 
-if not blink_channels and not isinstance(fit_data, np.ndarray):
+loaded_weights_directly = isinstance(fit_data, np.ndarray)
+if not blink_channels and not loaded_weights_directly:
 	raise SystemExit('no blink channels specified')
 	
 if isinstance(fit_data, mne.io.BaseRaw):
@@ -117,7 +119,7 @@ if isinstance(fit_data, mne.io.BaseRaw):
 	if OPTS1.plot: before = raw_apply.copy()
 	myARMBR.apply(raw_apply)
 	
-elif isinstance(fit_data, np.ndarray):
+elif loaded_weights_directly:
 	spatial_filters_as_rows = fit_data.T
 	raw_apply	= load_data( OPTS1.apply )
 	if OPTS1.plot: before = raw_apply.copy()
@@ -135,7 +137,13 @@ else:
 # Save weights
 if OPTS1.save_weights: 
 	print( 'saving weights to ' + OPTS1.save_weights )
-	np.savetxt(OPTS1.save_weights, myARMBR.blink_removal_matrix, fmt="%.10f")
+	if OPTS1.save_weights.lower().endswith( '.prm' ):
+		if loaded_weights_directly:
+			print( r'/!\ cannot save weights to .prm format without channel information from the original data file' )
+		else:
+			save_bci2000_weights(myARMBR.blink_removal_matrix, fit_data.info['ch_names'], OPTS1.save_weights, blink_channels=blink_channels, exclude_channels=exclude_channels)
+	else:
+		np.savetxt(OPTS1.save_weights, myARMBR.blink_removal_matrix, fmt="%.10f")
 
 
 # Plot EEG before and after blink removal

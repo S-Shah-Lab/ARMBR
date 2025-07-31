@@ -29,6 +29,8 @@ from armbr import ARMBR       # MNE-compatible wrapper class
 
 
 
+import os
+import time
 import copy
 
 import numpy as np
@@ -509,7 +511,7 @@ class ARMBR:
 		"""
 
 		# === Handle Blink Channels (unchanged logic) ===
-		if isinstance(ch, str): ch = ch.replace(',', ' ').split()
+		if isinstance(blink_chs, str): blink_chs = blink_chs.replace(',', ' ').split()
 		is_all_int = all(isinstance(ch, int) or (isinstance(ch, str) and ch.isdigit()) for ch in blink_chs)
 		is_all_str = all(isinstance(ch, str) for ch in blink_chs)
 
@@ -1163,4 +1165,49 @@ def _blink_selection(eeg_orig, eeg_filt, blink_filt, alpha, mask_in=None):
 
 	return eeg_clean, blink_artifact, ref_mask, blink_pattern, blink_removal_matrix
 
+def load_bci2000_weights(filename, exception_type=ValueError):
+	failure = exception_type("failed to parse BCI2000 parameter SpatialFilter out of {}".format(filename))
+	with open(filename) as fh: lines = [line.strip().split('=', 1)[-1] for line in fh if 'SpatialFilter=' in line.split()]
+	if not lines: raise failure
+	tokens = lines[-1].split()
+	shape = []
+	channel_names = []
+	for i in range(2):
+		if not tokens: raise failure
+		try: count = int(tokens[0])
+		except:
+			if tokens[0] != '{' or '}' not in tokens: raise failure
+			count = tokens.index('}') - 1
+			if not channel_names: channel_names = tokens[1:count+1]
+			tokens[:count + 1] = []
+		shape.append(count)
+		tokens.pop(0)
+	blink_removal_matrix = np.zeros(shape, dtype=float)
+	if len(tokens) != blink_removal_matrix.size: raise failure
+	try: weights = [float(weight) for weight in tokens]
+	except: raise failure
+	blink_removal_matrix.T.flat = weights
+	return blink_removal_matrix, channel_names
 
+def save_bci2000_weights(blink_removal_matrix, channel_names, filename, blink_channels=None, exclude_channels=None):
+	blink_channels   = ' targeting {{{}}}'.format(','.join(  blink_channels.replace(',',' ').split() if isinstance(  blink_channels, str) else   blink_channels)) if   blink_channels else ''
+	exclude_channels = ' excluding {{{}}}'.format(','.join(exclude_channels.replace(',',' ').split() if isinstance(exclude_channels, str) else exclude_channels)) if exclude_channels else ''
+	comment = "made {when} by ARMBR {version}{blink_channels}{conjunction}{exclude_channels} based on {filename}".format(
+		version = __version__,
+		when = time.strftime('%Y-%m-%d %H:%M:%S'),
+		blink_channels = blink_channels,
+		conjunction = ' and' if blink_channels and exclude_channels else '',
+		exclude_channels = exclude_channels,
+		filename = os.path.basename( filename ),
+	)
+	with open(filename, 'w') as fh:
+		fh.write("""\
+Filtering int    SpatialFilterType= 1 // {comment}
+Filtering matrix SpatialFilter=    {{ {channels} }} {{ {channels} }} {weights}
+Source    list   TransmitChList= {nChannels}  {channels}
+		""".rstrip('\t ').format(
+			comment = comment,
+			channels = ' '.join(channel_names),
+			nChannels = blink_removal_matrix.shape[1],
+			weights = ' '.join(str(weight) for row in blink_removal_matrix.T for weight in row),
+		))
