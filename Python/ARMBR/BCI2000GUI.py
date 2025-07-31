@@ -348,11 +348,123 @@ class BCI2000GUI(tk.Tk):
 		
 		self.update_message(text='Blink channels: ' + str(self.blink_chan))
 		
-
-
-def RunGUI( *pargs, **kwargs ):	
+def run_gui( *pargs, **kwargs ):	
 	app = BCI2000GUI( *pargs, **kwargs )
 	app.mainloop()
 
+
+def install_demo( bci2000root=None, show=False ):
+
+	def create_file( content, directory, filename ):
+		filepath = os.path.join(directory, filename)
+		verb = 'Overwrote' if os.path.isfile(filepath) else 'Created'
+		with open(filepath, "w") as file:
+			file.write(content)
+		print("✅ {verb} {filepath}".format(verb=verb, filepath=filepath))
+	
+	if bci2000root: # Case 1: Directory provided
+		dirs = [ bci2000root ]
+	else: # Case 2: Ask user for directories
+		#dirs_input = input("Enter one or more BCI2000 distribution root directory (comma-separated): ")
+		#dirs = [d.strip() for d in dirs_input.split(",") if d.strip()]
+		import tkinter.filedialog; root = tkinter.Tk(); root.withdraw(); dirs = [ tkinter.filedialog.askdirectory(message="Select the root directory of your BCI2000 distribution", initialdir=os.getcwd()) ]
+		if dirs == [ '' ]: raise RuntimeError('user cancelled')
+		
+	exit_status = 0
+	for directory in dirs:
+		directory = os.path.abspath(os.path.expanduser(directory))
+		if os.path.exists(directory):
+			create_file(ARMBR_FIT_CONTENT,   os.path.join(directory, 'batch'), 'ARMBR_Fit.bat')
+			create_file(ARMBR_APPLY_CONTENT, os.path.join(directory, 'batch'), 'ARMBR_Apply.bat')
+		else:
+			print("⚠️  Directory '{directory}' does not exist.".format(directory=directory))
+			exit_status = 1
+	if show and len(dirs) == 1 and exit_status == 0:
+		if sys.platform.lower().startswith('win'): os.system('start "" "{}"'.format(os.path.join(dirs[0], 'batch')))
+	return exit_status
+
+##########################################################################
+################# .bat file contents #####################################
+##########################################################################
+
+
+ARMBR_FIT_CONTENT = r"""
+
+@cd "%~dp0.."
+
+@python -V || (
+	echo.
+	echo You need to install Python
+	echo.
+	pause
+	exit /b 1
+)
+
+@python -m ARMBR --version || (
+	echo.
+	echo The ARMBR package was not found in this Python distribution.
+	echo To fix this, you should do: python -m pip install ARMBR
+	echo.
+	pause
+	exit /b 1
+)
+
+@python -m ARMBR "--BCI2000=%CD%" %* || pause
+""".lstrip()
+
+ARMBR_APPLY_CONTENT = r"""
+
+#! ../prog/BCI2000Shell
+@cls & ..\prog\BCI2000Shell %0 %* #! && exit /b 0 || exit /b 1
+
+
+change directory $BCI2000LAUNCHDIR
+show window
+set title ${extract file base $0}
+reset system
+startup system localhost
+
+set environment DATFILE  $1 
+if [ $DATFILE == "" ]
+	set environment DATFILE ${real path "../data/samplefiles/eeg1_2.dat"}
+	warn playing default file $DATFILE
+end
+set title ${extract file base $DATFILE}.dat
+
+start executable FilePlayback             --local --FileFormat=null --PlaybackFileName=$DATFILE
+start executable SpectralSignalProcessing --local
+start executable DummyApplication         --local
+
+wait for connected
+
+set environment WEIGHTS ${real path ../parms/ARMBR_BlinkRemovalMatrix.prm}
+if [ ${exists file $WEIGHTS} ]
+	load parameterfile $WEIGHTS
+else
+	warn ARMBR will not be applied - found no $WEIGHTS
+end
+
+set parameter VisualizeTiming                      0
+set parameter VisualizeSource                      0
+set parameter VisualizeTransmissionFilter          1
+set parameter VisualizeSpatialFilter               1
+set parameter VisualizeSpectralEstimator           0
+
+set parameter Filtering matrix Classifier=  1 4    1 1 1 0
+set parameter Filtering matrix Expressions= 1 1    0
+set parameter Filtering list   Adaptation=    1    0
+
+set parameter WindowLength                         1s
+set parameter FirstBinCenter                       1Hz
+set parameter LastBinCenter                       80Hz
+set parameter BinWidth                             1Hz
+set parameter SpectralEstimator                    2    # FFT
+
+setconfig
+set state Running 1
+""".lstrip()
+
+
+	
 if __name__ == "__main__":
-	RunGUI()
+	run_gui()

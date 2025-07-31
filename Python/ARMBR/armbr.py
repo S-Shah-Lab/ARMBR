@@ -199,7 +199,7 @@ class ARMBR:
 				# No armbr_fit found, use all non-BAD data
 				data = raw.get_data(picks=picks)[:, mask]
 				total_secs = mask.sum() / raw.info['sfreq']
-				LOGGER.info("No 'armbr_fit' found. Using {:.2f} seconds of non-BAD data.".format(total_secs))
+				LOGGER.info("Found no segments annotated as 'armbr_fit'. Using {:.2f} seconds of non-BAD data.".format(total_secs))
 			else:
 				segments = []
 				for annot in armbr_annots:
@@ -1166,6 +1166,11 @@ def _blink_selection(eeg_orig, eeg_filt, blink_filt, alpha, mask_in=None):
 	return eeg_clean, blink_artifact, ref_mask, blink_pattern, blink_removal_matrix
 
 def load_bci2000_weights(filename):
+	"""
+	Load a blink-removal weight matrix from a plain-text BCI2000-formatted .prm file.
+	
+	returns (blink_removal_matrix, channel_names)
+	"""# NB: we put this here rather than in BCI2000GUI.py because it has no dependencies and is more general-purpose (it's as good a plain-text format as any, for saving and loading weights)
 	failure = ValueError("failed to parse BCI2000 parameter SpatialFilter out of {}".format(filename))
 	with open(filename) as fh: lines = [line.strip().split('=', 1)[-1] for line in fh if 'SpatialFilter=' in line.split()]
 	if not lines: raise failure
@@ -1190,6 +1195,12 @@ def load_bci2000_weights(filename):
 	return blink_removal_matrix, channel_names
 
 def save_bci2000_weights(blink_removal_matrix, channel_names, filename, training_file_name=None, blink_channels=None, exclude_channels=None):
+	"""
+	Save blink_removal_matrix weights in a plain-text BCI2000-formatted .prm file.
+	`training_file_name`, `blink_channels` and `exclude_channels` are all optional
+	(if supplied, they are added to the comment in the file, but they do not affect
+	its performance).
+	"""# NB: we put this here rather than in BCI2000GUI.py because it has no dependencies and is more general-purpose (it's as good a plain-text format as any, for saving and loading weights)
 	blink_channels   = ' targeting {{{}}}'.format(','.join(  blink_channels.replace(',',' ').split() if isinstance(  blink_channels, str) else   blink_channels)) if   blink_channels else ''
 	exclude_channels = ' excluding {{{}}}'.format(','.join(exclude_channels.replace(',',' ').split() if isinstance(exclude_channels, str) else exclude_channels)) if exclude_channels else ''
 	training_file_name = ' based on {}'.format(os.path.basename(training_file_name)) if training_file_name else ''

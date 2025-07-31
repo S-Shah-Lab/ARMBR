@@ -41,7 +41,8 @@ OPTS1 = parser1.parse_args()
 
 
 
-from ARMBR import ARMBR, __version__, load_bci2000_weights, save_bci2000_weights
+from ARMBR import ARMBR, __version__
+from ARMBR import load_bci2000_weights, save_bci2000_weights
 
 def load_data(filename):
 	
@@ -88,87 +89,6 @@ def load_data(filename):
 		raise SystemExit('At the moment this code supports files of type .fif, .edf, .dat and .txt.')
 
 
-def create_file( content, directory, filename ):
-	filepath = os.path.join(directory, filename)
-	with open(filepath, "w") as file:
-		file.write(content)
-	print(f"✅ Created {filepath}")
-
-
-##########################################################################
-################# .bat file contents #####################################
-##########################################################################
-
-
-ARMBR_FIT_CONTENT = r"""@cd "%~dp0.."
-@python -V || (
-	echo.
-	echo You need to install Python
-	echo.
-	pause
-	exit /b 1
-)
-
-
-@python -m ARMBR --version || (
-	echo.
-	echo The ARMBR package was not found in this Python distribution.
-	echo To fix this, you should do: python -m pip install ARMBR
-	echo.
-	pause
-	exit /b 1
-)
-@python -m ARMBR "--BCI2000=%CD%" || pause
-"""
-
-ARMBR_APPLY_CONTENT = r"""#! ../prog/BCI2000Shell
-@cls & ..\prog\BCI2000Shell %0 %* #! && exit /b 0 || exit /b 1\n
-
-
-change directory $BCI2000LAUNCHDIR
-show window
-set title ${extract file base $0}
-reset system
-startup system localhost
-
-set environment DATFILE  $1 
-if [ $DATFILE == "" ]; set environment DATFILE "../data/samplefiles/eeg1_2.dat";    end
-set title ${extract file base $DATFILE}.dat
-
-start executable FilePlayback             --local --FileFormat=null --PlaybackFileName=$DATFILE
-start executable SpectralSignalProcessing --local
-start executable DummyApplication         --local
-
-wait for connected
-
-set environment WEIGHTS ../parms/ARMBR_BlinkRemovalMatrix.prm
-if [ ${exists file $WEIGHTS} ]
-	load parameterfile $WEIGHTS
-else
-	warn ARMBR will not be applied - found no $WEIGHTS
-end
-
-set parameter VisualizeTiming                      0
-set parameter VisualizeSource                      0
-set parameter VisualizeTransmissionFilter          1
-set parameter VisualizeSpatialFilter               1
-set parameter VisualizeSpectralEstimator           0
-
-set parameter Filtering matrix Classifier=  1 4    1 1 1 0
-set parameter Filtering matrix Expressions= 1 1    0
-set parameter Filtering list   Adaptation=    1    0
-
-set parameter WindowLength                         1s
-set parameter FirstBinCenter                       1Hz
-set parameter LastBinCenter                       80Hz
-set parameter BinWidth                             1Hz
-set parameter SpectralEstimator                    2    # FFT
-
-setconfig
-set state Running 1
-"""
-
-
 #===============================================================================
 
 
@@ -177,29 +97,15 @@ if OPTS1.version:
 	sys.exit( 0 )
 
 if OPTS1.install_bci2000_demo:
-	if OPTS1.BCI2000: # Case 1: Directory provided
-		create_file( ARMBR_FIT_CONTENT,		os.path.join(OPTS1.BCI2000, 'batch'), 'ARMBR_Fit.bat')
-		create_file( ARMBR_APPLY_CONTENT,	os.path.join(OPTS1.BCI2000, 'batch'), 'ARMBR_Apply.bat')
-		
-	else: # Case 2: Ask user for directories
-		dirs_input = input("Enter one or more BCI2000 distribution root directory (comma-separated): ")
-		dirs = [d.strip() for d in dirs_input.split(",") if d.strip()]
-		
-		for directory in dirs:
-			if os.path.exists(directory):
-				create_file(ARMBR_FIT_CONTENT,   os.path.join(directory, 'batch'), 'ARMBR_Fit.bat')
-				create_file(ARMBR_APPLY_CONTENT, os.path.join(directory, 'batch'), 'ARMBR_Apply.bat')
-			else:
-				print(f"⚠️ Directory '{directory}' does not exist.")
-
-	sys.exit( 0 )
-
+	from ARMBR.BCI2000GUI import install_demo
+	try: sys.exit(install_demo(OPTS1.BCI2000, show=True))
+	except Exception as err: raise SystemExit(err)
 
 if OPTS1.BCI2000:
-	from ARMBR.BCI2000GUI import RunGUI
+	from ARMBR.BCI2000GUI import run_gui
 	for opt in 'save_eeg save_weights plot'.split():
 		if getattr( OPTS1, opt ): raise SystemExit( "The --%s option is not supported in --BCI2000 GUI mode." % opt.replace( '_', '-' ) )
-	sys.exit( RunGUI( bci2000root=OPTS1.BCI2000, data_file_path=OPTS1.fit, blink_channels=OPTS1.blink_channels ) )
+	sys.exit( run_gui( bci2000root=OPTS1.BCI2000, data_file_path=OPTS1.fit, blink_channels=OPTS1.blink_channels ) )
 
 
 import numpy as np
