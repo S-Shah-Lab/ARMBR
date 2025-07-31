@@ -142,9 +142,12 @@ class BCI2000GUI(tk.Tk):
 
 	def select_dat_file(self, file_path=None):
 		if not file_path:
+			data_dir = os.path.join(self.bci2000root, 'data')
+			if not os.path.isdir(data_dir): data_dir = self.bci2000root
+			if not os.path.isdir(data_dir): data_dir = os.getcwd()
 			file_path = filedialog.askopenfilename(
 				filetypes=[("DAT files", "*.dat")],
-				initialdir=self.bci2000root
+				initialdir=data_dir,
 			)
 		if file_path:
 			self.data_file_path = os.path.abspath( os.path.expanduser( file_path ) )  # Store full path internally
@@ -392,26 +395,47 @@ def install_demo( bci2000root=None, show=False ):
 
 ARMBR_FIT_CONTENT = r"""
 
-@cd "%~dp0.."
+:<<@GOTO:EOF
 
-@python -V || (
+:: Windows cmd.exe #################################################
+
+@echo off
+python -V || (
 	echo.
 	echo You need to install Python
 	echo.
 	pause
 	exit /b 1
 )
-
-@python -m ARMBR --version || (
+python -m ARMBR --version || (
 	echo.
 	echo The ARMBR package was not found in this Python distribution.
-	echo To fix this, you should do: python -m pip install ARMBR
+	echo To fix this, run:  python -m pip install ARMBR
 	echo.
 	pause
 	exit /b 1
 )
+set OLDDIR="%CD%"
+cd "%~dp0.."
+set "BCI2000ROOT=%CD%"
+cd "%OLDDIR%"
+python -m ARMBR "--BCI2000=%BCI2000ROOT%" %* || pause
 
-@python -m ARMBR "--BCI2000=%CD%" %* || pause
+@GOTO:EOF
+
+## Bash ##########################################################
+
+OLDDIR=$(pwd)
+cd $(dirname "${BASH_SOURCE[0]}")/..
+BCI2000ROOT=$(pwd)
+cd "$OLDDIR"
+
+which python3 >/dev/null 2>&1 && SNAKE=python3 || SNAKE=python
+$SNAKE -V && GOT_PYTHON=1 || GOT_PYTHON=
+test -z "$GOT_PYTHON" && echo -e '\nCould not find a python executable\n' && exit 1
+$SNAKE -m ARMBR --version && GOT_ARMBR=1 || GOT_ARMBR=
+test -z "$GOT_ARMBR" && echo -e '\nThe ARMBR package was not found in this Python distribution.\nTo fix this, run:  python -m pip install ARMBR\n' && exit 1
+$SNAKE -m ARMBR --BCI2000=$BCI2000ROOT "$@" 
 """.lstrip()
 
 ARMBR_APPLY_CONTENT = r"""
