@@ -60,16 +60,20 @@ python -m pip install -e  ./Python
 5) Download folder `SemiSyntheticData` and add it to the main ARMBR directory.
 
 
-6) OPTIONAL: If you wish to train and apply ARMBR in BCI2000, first you have to install the proper batch files using:
+6) OPTIONAL: we provide a GUI-enabled demo workflow for applying ARMBR in BCI2000. It consists of two batch files, which you can install as follows:
 ```
-python -m ARMBR --BCI2000=C:\path\to\bci2000 --install-bci2000-demo
+python -m ARMBR --install-bci2000-demo --BCI2000=C:\path\to\bci2000_root_directory
 ```
-Here, the BCI2000 path is provided. However, you don't have to define the distribution directory and use:
+In the example above, the BCI2000 path is provided explicitly, but you can also do this:
 ```
 python -m ARMBR --install-bci2000-demo
 ```
-In this case, you will be prompted to provide one or many BCI2000 distribution directories. The code will create `ARMBR_Fit.bat` as well as `ARMBR_Apply.bat`, under `\batch` folder.
-
+In this case, you will be prompted to select the location of your BCI2000 distribution. Either way, ARMBR will create `ARMBR_Fit.bat` as well as `ARMBR_Apply.bat`, in BCI2000's `batch` folder.
+`ARMBR_Fit.bat` is simply a wrapper around this command, to start the GUI:
+```
+python -m ARMBR --BCI2000=C:\path\to\bci2000_root_directory
+```
+The GUI allows you to save a blink-removal parameter file in BCI2000's `parms` directory, which `ARMBR_Apply.bat` will automatically pick up.  You can launch `ARMBR_Apply.bat` to play back the default data file from BCI2000's `data/samplefiles` collection, or you can supply a different filename as a command-line argument, or in the BCI2000 Config dialog.
 
 
 # MATLAB Implementation 
