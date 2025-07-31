@@ -144,7 +144,8 @@ if OPTS1.save_weights:
 		if loaded_weights_directly:
 			print( r'/!\ cannot save weights to .prm format without channel information from the original data file' )
 		else:
-			save_bci2000_weights(myARMBR.blink_removal_matrix, fit_data.info['ch_names'], OPTS1.save_weights, blink_channels=blink_channels, exclude_channels=exclude_channels)
+			save_bci2000_weights(myARMBR.blink_removal_matrix, fit_data.info['ch_names'], OPTS1.save_weights,
+			                     training_file_name=OPTS1.fit, blink_channels=blink_channels, exclude_channels=exclude_channels)
 	else:
 		np.savetxt(OPTS1.save_weights, myARMBR.blink_removal_matrix, fmt="%.10f")
 

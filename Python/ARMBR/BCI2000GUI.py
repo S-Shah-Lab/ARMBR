@@ -60,7 +60,7 @@ class BCI2000GUI(tk.Tk):
 		self.browse_button.grid(row=0, column=1, pady=5, sticky="w")
 
 		# Label to show the selected .dat file name
-		self.selected_file_label = tk.Label(self, text="No file selected", anchor="center", fg='blue', width=60)
+		self.selected_file_label = tk.Label(self, text="No file selected", anchor="center", fg='#2288FF', width=60)
 		self.selected_file_label.grid(row=1, column=0, columnspan=3, padx=25, pady=5, sticky="w")
 
 		
@@ -286,7 +286,8 @@ class BCI2000GUI(tk.Tk):
 		self.m = blink_removal_matrix
 
 		weights_file_name = os.path.join(self.default_params_path, self.default_param_name)
-		save_bci2000_weights( self.m, channel_names=self.channel_names, filename=weights_file_name, blink_channels=self.blink_chan, exclude_channels=self.exclude_chan)
+		save_bci2000_weights( self.m, channel_names=self.channel_names, filename=weights_file_name,
+		                      training_file_name=weights_file_name, blink_channels=self.blink_chan, exclude_channels=self.exclude_chan)
 		self.update_message(text='Weights saved at: '+ weights_file_name, do_wrap=False)
 		
 		return self

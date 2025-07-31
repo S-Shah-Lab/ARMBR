@@ -1189,22 +1189,23 @@ def load_bci2000_weights(filename):
 	blink_removal_matrix.T.flat = weights
 	return blink_removal_matrix, channel_names
 
-def save_bci2000_weights(blink_removal_matrix, channel_names, filename, blink_channels=None, exclude_channels=None):
+def save_bci2000_weights(blink_removal_matrix, channel_names, filename, training_file_name=None, blink_channels=None, exclude_channels=None):
 	blink_channels   = ' targeting {{{}}}'.format(','.join(  blink_channels.replace(',',' ').split() if isinstance(  blink_channels, str) else   blink_channels)) if   blink_channels else ''
 	exclude_channels = ' excluding {{{}}}'.format(','.join(exclude_channels.replace(',',' ').split() if isinstance(exclude_channels, str) else exclude_channels)) if exclude_channels else ''
-	comment = "made {when} by ARMBR {version}{blink_channels}{conjunction}{exclude_channels} based on {filename}".format(
+	training_file_name = ' based on {}'.format(os.path.basename(training_file_name)) if training_file_name else ''
+	comment = "made {when} by ARMBR {version}{blink_channels}{conjunction}{exclude_channels}{training_file_name}".format(
 		version = __version__,
 		when = time.strftime('%Y-%m-%d %H:%M:%S'),
 		blink_channels = blink_channels,
 		conjunction = ' and' if blink_channels and exclude_channels else '',
 		exclude_channels = exclude_channels,
-		filename = os.path.basename( filename ),
+		training_file_name = training_file_name,
 	)
 	with open(filename, 'w') as fh:
 		fh.write("""\
 Filtering int    SpatialFilterType= 1 // {comment}
-Filtering matrix SpatialFilter=    {{ {channels} }} {{ {channels} }} {weights}
-Source    list   TransmitChList= {nChannels}  {channels}
+Filtering matrix SpatialFilter=     {{ {channels} }} {{ {channels} }} {weights}
+Source    list   TransmitChList= {nChannels:3}  {channels}
 		""".rstrip('\t ').format(
 			comment = comment,
 			channels = ' '.join(channel_names),
