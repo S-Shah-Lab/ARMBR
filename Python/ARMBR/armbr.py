@@ -44,7 +44,7 @@ else:
 	import mne.utils; from mne.utils import verbose as VERBOSE, logger as LOGGER
 	import mne.filter
 
-__version__ = '2.0.9'  # @VERSION_INFO@
+__version__ = '2.0.10'  # @VERSION_INFO@
 
 
 class ARMBR:
