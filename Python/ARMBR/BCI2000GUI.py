@@ -367,7 +367,9 @@ def install_demo( bci2000root=None, show=False ):
 	else: # Case 2: Ask user for directories
 		#dirs_input = input("Enter one or more BCI2000 distribution root directory (comma-separated): ")
 		#dirs = [d.strip() for d in dirs_input.split(",") if d.strip()]
-		import tkinter.filedialog; root = tkinter.Tk(); root.withdraw(); dirs = [ tkinter.filedialog.askdirectory(message="Select the root directory of your BCI2000 distribution", initialdir=os.getcwd()) ]
+		import tkinter.filedialog; root = tkinter.Tk(); root.withdraw();
+		try:    dirs = [ tkinter.filedialog.askdirectory(message="Select the root directory of your BCI2000 distribution", initialdir=os.getcwd()) ]
+		except: dirs = [ tkinter.filedialog.askdirectory(  title="Select the root directory of your BCI2000 distribution", initialdir=os.getcwd()) ]
 		if dirs == [ '' ]: raise RuntimeError('user cancelled')
 		
 	exit_status = 0
