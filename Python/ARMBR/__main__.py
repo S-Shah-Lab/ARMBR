@@ -54,6 +54,7 @@ def load_data(filename):
 		return raw
 		
 	elif file_extension == '.dat':
+		reader = None
 		try:
 			from BCI2000Tools.FileReader import bcistream
 		except:
@@ -68,7 +69,7 @@ def load_data(filename):
 			sampling_rate    = reader.samplingfreq_hz
 			ch_names         = reader.params.ChannelNames
 		finally:
-			reader.close()
+			if reader: reader.close()
 		info = mne.create_info(ch_names=ch_names, sfreq=sampling_rate, ch_types='eeg')
 		raw = mne.io.RawArray(np.asarray(eeg_data)*1e-6, info)
 		return raw
@@ -78,7 +79,8 @@ def load_data(filename):
 		return blink_removal_matrix
 		
 	elif file_extension == '.prm':
-		blink_removal_matrix, channel_names = load_bci2000_weights(filename, SystemExit)
+		try: blink_removal_matrix, channel_names = load_bci2000_weights(filename)
+		except ValueError as err: raise SystemExit(err)
 		return blink_removal_matrix
 	else:
 		raise SystemExit('At the moment this code supports files of type .fif, .edf, .dat and .txt.')

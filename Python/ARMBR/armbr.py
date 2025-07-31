@@ -1165,8 +1165,8 @@ def _blink_selection(eeg_orig, eeg_filt, blink_filt, alpha, mask_in=None):
 
 	return eeg_clean, blink_artifact, ref_mask, blink_pattern, blink_removal_matrix
 
-def load_bci2000_weights(filename, exception_type=ValueError):
-	failure = exception_type("failed to parse BCI2000 parameter SpatialFilter out of {}".format(filename))
+def load_bci2000_weights(filename):
+	failure = ValueError("failed to parse BCI2000 parameter SpatialFilter out of {}".format(filename))
 	with open(filename) as fh: lines = [line.strip().split('=', 1)[-1] for line in fh if 'SpatialFilter=' in line.split()]
 	if not lines: raise failure
 	tokens = lines[-1].split()
