@@ -21,6 +21,7 @@ import argparse
 import warnings
 import os
 import sys
+import time
 
 
 parser1 = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter, prog='python -m ARMBR')
