@@ -71,7 +71,7 @@ def load_data(filename):
 			sampling_rate    = reader.samplingfreq_hz
 			ch_names         = reader.params.ChannelNames
 		finally:
-			if reader: reader.close()
+			if reader is not None: reader.close()
 		info = mne.create_info(ch_names=ch_names, sfreq=sampling_rate, ch_types='eeg')
 		raw = mne.io.RawArray(np.asarray(eeg_data)*1e-6, info)
 		return raw
