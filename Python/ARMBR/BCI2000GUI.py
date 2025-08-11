@@ -288,7 +288,7 @@ class BCI2000GUI(tk.Tk):
 
 		weights_file_name = os.path.join(self.default_params_path, self.default_param_name)
 		save_bci2000_weights( self.m, channel_names=self.channel_names, filename=weights_file_name,
-		                      training_file_name=weights_file_name, blink_channels=self.blink_chan, exclude_channels=self.exclude_chan)
+		                      training_file_name=self.data_file_path, blink_channels=self.blink_chan, exclude_channels=self.exclude_chan)
 		self.update_message(text='Weights saved at: '+ weights_file_name, do_wrap=False)
 		
 		return self
@@ -449,10 +449,9 @@ reset system
 startup system localhost
 
 set environment DATFILE  $1 
-#if [ $DATFILE == "" ]
-#	set environment DATFILE ${system python -c "import tkinter.filedialog;root=tkinter.Tk();root.withdraw();print(tkinter.filedialog.askopenfilename(filetypes=(('BCI2000 data files','*.dat'),)))"}
-#   #uncomment these lines if your operating system is configured to have system-wide access to a tkinter-enabled `python`
-#end
+if [ $DATFILE == "" ]
+	set environment DATFILE ${choose file of type .dat from ../data/samplefiles with prompt "Select a data file to play back:"}
+end
 if [ $DATFILE == "" ]
 	set environment DATFILE ${real path "../data/samplefiles/eeg1_2.dat"}
 	warn playing default file $DATFILE
