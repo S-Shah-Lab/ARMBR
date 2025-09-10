@@ -177,8 +177,6 @@ class ARMBR:
 			for annot in raw.annotations:
 				if annot['description'].startswith("BAD_"):
 					onset, duration = annot['onset'], annot['duration']
-					print(onset)
-					print(raw.first_time)
 
 					bad_start, bad_stop = raw.time_as_index([onset - raw.first_time, onset + duration - raw.first_time])
 					mask[bad_start:bad_stop] = False
@@ -568,7 +566,8 @@ class ARMBR:
 
 			else:
 				raise ValueError("Exclude channel list must contain only channel names or only indices.")
-
+		else:
+			self.exclude_ch_inx = []
 
 
 
