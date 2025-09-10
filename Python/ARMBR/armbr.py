@@ -23,8 +23,8 @@ https://doi.org/10.1088/1741-2552/ade566
 
 
 The core algorithm supports both standalone and MNE integration via the `ARMBR` class:
-from armbr import run_armbr   # core non-MNE-dependent code (just needs numpy)
-from armbr import ARMBR       # MNE-compatible wrapper class
+from ARMBR import run_armbr   # core non-MNE-dependent code (just needs numpy)
+from ARMBR import ARMBR       # MNE-compatible wrapper class
 """
 
 
