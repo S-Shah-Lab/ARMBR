@@ -42,16 +42,16 @@ Alkhoury L, Scanavini G, Louviot S, Radanovic A, Shah SA & Hill NJ (2025). *Arti
 
 ```bibtex
 @article{alkhoury2025armbr,
-    author  = {Alkhoury, Ludvik and Scanavini, Giacomo and Louviot, Samuel and Radanovic, Ana and Shah, Sudhin A and Hill, N Jeremy},
-    title   = {Artifact-Reference Multivariate Backward Regression ({ARMBR}): A Novel Method for {EEG} Blink Artifact Removal with Minimal Data Requirements},
-    journal = {Journal of Neural Engineering},
-    volume  = {22},
-    number  = {3},
-    pages   = {036048},
-    year    = {2025},
-    date    = {2025-06-25},
-    doi     = {10.1088/1741-2552/ade566},
-    url     = {https://doi.org/10.1088/1741-2552/ade566},
+	author  = {Alkhoury, Ludvik and Scanavini, Giacomo and Louviot, Samuel and Radanovic, Ana and Shah, Sudhin A and Hill, N Jeremy},
+	title   = {Artifact-Reference Multivariate Backward Regression ({ARMBR}): A Novel Method for {EEG} Blink Artifact Removal with Minimal Data Requirements},
+	journal = {Journal of Neural Engineering},
+	volume  = {22},
+	number  = {3},
+	pages   = {036048},
+	year    = {2025},
+	date    = {2025-06-25},
+	doi     = {10.1088/1741-2552/ade566},
+	url     = {https://doi.org/10.1088/1741-2552/ade566},
 }			
 
 """
@@ -97,17 +97,25 @@ update_readme_version("README.md", current_version)
 
 setup_args = dict(name='ARMBR',
 package_dir={ '' : package_dir },
-      version=current_version, # @VERSION_INFO@
-      description='Python implementation of the ARMBR blink removal method',
-      long_description=long_description,
-      long_description_content_type="text/markdown",
-      url='https://github.com/S-Shah-Lab/ARMBR.git',
-      author='Ludvik Alkhoury',
-      author_email='Ludvik.Alkhoury@gmail.com',
-      packages=['ARMBR'],
-      install_requires=['scipy', 'numpy'])
-      
-      
+	  version=current_version, # @VERSION_INFO@
+	  description='Python implementation of the ARMBR blink removal method',
+	  long_description=long_description,
+	  long_description_content_type="text/markdown",
+	  url='https://github.com/S-Shah-Lab/ARMBR.git',
+	  author='Ludvik Alkhoury',
+	  author_email='Ludvik.Alkhoury@gmail.com',
+	  packages=['ARMBR'],
+	  install_requires=['scipy', 'numpy'],
+	  license="GPL-3.0-only",
+	  classifiers=[
+	        "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+	        "Programming Language :: Python :: 3",
+	        "Operating System :: OS Independent",
+		],
+	)
+	  
+	  
+	  
 if __name__ == '__main__' and getattr( sys, 'argv', [] )[ 1: ]:
 	setuptools.setup( **setup_args )
 else:
@@ -115,7 +123,7 @@ else:
 The ARMBR setup.py file should not be run or imported directly.
 Instead, it is used as follows::
 
-    python -m pip install -e  "%s"
+	python -m pip install -e  "%s"
 
 """ % HERE )
 
